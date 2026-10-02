@@ -1,0 +1,114 @@
+package com.myfamily.meow.ui.debug
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.myfamily.meow.debug.FakePaymentNotifier
+import com.myfamily.meow.notification.NotificationAccess
+import com.myfamily.meow.repository
+import com.myfamily.meow.ui.common.formatTime
+import com.myfamily.meow.ui.theme.Surface
+import com.myfamily.meow.ui.theme.TextSecondary
+
+/** Debug-build tools: fake payment notifications, captured raw notifications, AI test. */
+@Composable
+fun DebugScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var showAi by remember { mutableStateOf(false) }
+    if (showAi) {
+        AiTestScreen(modifier)
+        return
+    }
+
+    var listenerOn by remember { mutableStateOf(NotificationAccess.isGranted(context)) }
+    LifecycleResumeEffect(Unit) {
+        listenerOn = NotificationAccess.isGranted(context)
+        onPauseOrDispose { }
+    }
+    var pendingFakes by remember { mutableStateOf<List<FakePaymentNotifier.Fake>?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        pendingFakes?.let { if (ok) FakePaymentNotifier.post(context, it) }
+        pendingFakes = null
+    }
+
+    fun post(fakes: List<FakePaymentNotifier.Fake>) {
+        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            pendingFakes = fakes
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            FakePaymentNotifier.post(context, fakes)
+        }
+    }
+
+    val rawEvents by remember { context.repository.recentRawEvents() }.collectAsState(initial = emptyList())
+
+    Column(
+        modifier
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("개발자 도구", style = MaterialTheme.typography.headlineSmall)
+        Text("알림 접근: ${if (listenerOn) "켜짐 ✅" else "꺼짐 ❌ (가짜 알림도 수집 안 됨)"}")
+        if (!listenerOn) {
+            OutlinedButton(onClick = { context.startActivity(NotificationAccess.fallbackIntent()) }) {
+                Text("알림 접근 설정 열기")
+            }
+        }
+
+        Text("가짜 결제 알림 보내기", style = MaterialTheme.typography.titleMedium)
+        Button(onClick = { post(FakePaymentNotifier.CHARGE_SCENARIO) }) { Text("출금 → 충전 → 결제 (10,000원 ×3)") }
+        FakePaymentNotifier.SINGLES.forEach { fake ->
+            OutlinedButton(onClick = { post(listOf(fake)) }) { Text("${fake.sourceLabel}: ${fake.text.lines().last().take(24)}…") }
+        }
+
+        OutlinedButton(onClick = { showAi = true }) { Text("Gemma 분류 테스트 열기") }
+
+        HorizontalDivider()
+        Text("최근 수집된 원본 알림 (${rawEvents.size})", style = MaterialTheme.typography.titleMedium)
+        rawEvents.forEach { e ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Surface)
+                    .padding(10.dp),
+            ) {
+                Text("${formatTime(e.detectedAt)} · ${e.packageName} · ${e.parseStatus}", color = TextSecondary, fontSize = 12.sp)
+                Text(e.rawTitle, fontSize = 14.sp)
+                Text(e.rawText, fontSize = 13.sp, color = TextSecondary)
+                Text("→ ${e.amount ?: "-"}원 / ${e.merchant ?: "-"}", fontSize = 13.sp)
+            }
+        }
+    }
+}
