@@ -126,7 +126,9 @@ fun HistoryScreen(onHome: () -> Unit) {
         } else {
             val days = byDay.keys.sortedDescending()
             val visible = days.mapNotNull { d ->
-                val rows = byDay[d].orEmpty().filter { showExcluded || it.status == TransactionStatus.INCLUDED }
+                val rows = byDay[d].orEmpty()
+                    .filter { showExcluded || it.status == TransactionStatus.INCLUDED }
+                    .sortedByDescending { it.transactionTime } // newest first within the day
                 if (rows.isEmpty()) null else d to rows
             }
             if (visible.isEmpty()) {
@@ -382,7 +384,9 @@ private fun DayDetail(
         if (transactions.isEmpty()) {
             Text("기록된 내역이 없어요", color = TextMuted, fontSize = 16.sz)
         }
-        transactions.sortedBy { it.status != TransactionStatus.INCLUDED }.forEach { tx -> HistoryRow(tx) { onEdit(tx) } }
+        transactions
+            .sortedWith(compareBy<ExpenseTransaction> { it.status != TransactionStatus.INCLUDED }.thenByDescending { it.transactionTime })
+            .forEach { tx -> HistoryRow(tx) { onEdit(tx) } }
         Text(
             "지출 ${formatWon(transactions.spent)}" + if (transactions.earned > 0) " · 수입 +${formatWon(transactions.earned)}" else "",
             color = Pink,

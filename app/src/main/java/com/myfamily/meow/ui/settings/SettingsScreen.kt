@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.aiCategorizer
+import com.myfamily.meow.notification.ForegroundApp
 import com.myfamily.meow.notification.NotificationAccess
 import com.myfamily.meow.reminder.DailyReviewScheduler
 import com.myfamily.meow.reminder.ReminderSettings
@@ -47,9 +48,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     var pickingTime by remember { mutableStateOf(false) }
     var listenerOn by remember { mutableStateOf(false) }
     var canNotify by remember { mutableStateOf(false) }
+    var usageOn by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         listenerOn = NotificationAccess.isGranted(context)
         canNotify = canPostNotifications(context)
+        usageOn = ForegroundApp.isGranted(context)
         onPauseOrDispose { }
     }
 
@@ -92,6 +95,13 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             onClick = { context.startActivity(NotificationAccess.fallbackIntent()) },
         ) {
             Text(if (listenerOn) "켜짐" else "꺼짐", color = if (listenerOn) Mint else TextSecondary)
+        }
+        SettingRow(
+            title = "사용 정보 접근",
+            subtitle = "결제 직전 사용한 앱으로 카테고리를 돕고 메모에 남겨요",
+            onClick = { context.startActivity(ForegroundApp.settingsIntent()) },
+        ) {
+            Text(if (usageOn) "켜짐" else "꺼짐", color = if (usageOn) Mint else TextSecondary)
         }
         SettingRow(
             title = "온디바이스 AI 분류",

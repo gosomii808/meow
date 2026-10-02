@@ -69,13 +69,18 @@ class TransactionRepository(private val db: AppDatabase) {
      * Stores the raw notification and, if it parsed, a PENDING candidate with category,
      * transfer and duplicate hints. Returns false if the notification was already recorded.
      */
-    suspend fun recordNotification(event: RawPaymentEvent, sourceLabel: String): Boolean {
+    suspend fun recordNotification(
+        event: RawPaymentEvent,
+        sourceLabel: String,
+        foregroundAppLabel: String? = null,
+        foregroundCategory: Category? = null,
+    ): Boolean {
         val rawId = rawDao.insert(event)
         if (rawId == -1L) return false
         if (event.parseStatus != ParseStatus.SUCCESS || event.amount == null) return true
 
         val merchant = event.merchant ?: sourceLabel
-        val (category, classifiedBy) = classifyWithoutAi(merchant)
+        val (category, classifiedBy) = classifyWithoutAi(merchant, foregroundCategory)
         val id = txDao.insert(
             ExpenseTransaction(
                 rawEventId = rawId,
@@ -87,16 +92,22 @@ class TransactionRepository(private val db: AppDatabase) {
                 classificationSource = classifiedBy,
                 transferLikely = TransferDetector.isTransferLike(event.rawTitle, event.rawText),
                 source = TransactionSource.NOTIFICATION,
+                // Spec §FR-03: note which app was open, so the user sees why it was categorized.
+                memo = foregroundAppLabel?.let { "$it 앱 사용 중 결제" },
             )
         )
         markDuplicates(id, event.amount, event.detectedAt)
         return true
     }
 
-    /** Chain steps ① user history and ③ merchant rules; ETC means "leave it to AI". */
-    private suspend fun classifyWithoutAi(merchant: String): Pair<Category, ClassificationSource> {
+    /**
+     * Chain steps ① user history, ③ merchant rules, then ② the foreground app as a fallback
+     * (fills gaps when the bank only shows a corporation name). ETC means "leave it to AI".
+     */
+    private suspend fun classifyWithoutAi(merchant: String, foregroundCategory: Category?): Pair<Category, ClassificationSource> {
         correctionDao.latestFor(merchantKey(merchant))?.let { return it.correctedCategory to ClassificationSource.USER }
         RuleClassifier.classify(merchant)?.let { return it to ClassificationSource.RULE }
+        foregroundCategory?.let { return it to ClassificationSource.APP }
         return Category.ETC to ClassificationSource.RULE
     }
 

@@ -4,6 +4,11 @@
 
     <!-- Debug-only fake payment notifications; later also the daily review reminder. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Which app was open at payment time, as a classification hint (spec §FR-03).
+         Special access: the user grants it in Settings → Usage access. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".MeowApplication"

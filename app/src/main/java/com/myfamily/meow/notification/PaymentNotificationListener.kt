@@ -40,6 +40,9 @@ class PaymentNotificationListener : NotificationListenerService() {
             else -> null
         }
         val parsed = if (dropReason == null) NotificationParser.parse(title, text) else null
+        // Capture the foreground app now (it changes fast); null when the real notification isn't
+        // a payment, or in debug for this app's own fake notifications.
+        val foregroundApp = if (dropReason == null && !isFake) ForegroundApp.relevantApp(this) else null
         // Income (입금/환불/승인취소) is not tracked; drop it instead of recording a fake expense.
         if (parsed?.isIncome == true) {
             if (diagnostics) {
@@ -66,10 +69,13 @@ class PaymentNotificationListener : NotificationListenerService() {
                         amount = parsed?.amount,
                         merchant = parsed?.merchant,
                         detectedAt = sbn.postTime,
+                        foregroundApp = foregroundApp,
                         fingerprint = "${sbn.packageName}|$title|$text|${sbn.postTime / 60_000}",
                         parseStatus = if (parsed != null) ParseStatus.SUCCESS else ParseStatus.FAILED,
                     ),
                     sourceLabel = label,
+                    foregroundAppLabel = foregroundApp?.let { ForegroundApp.label(applicationContext, it) },
+                    foregroundCategory = ForegroundApp.category(foregroundApp),
                 )
             }
             if (diagnostics && !isFake && Diagnostics.looksMoneyRelated(title, text)) {

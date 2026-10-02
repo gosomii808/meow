@@ -265,6 +265,7 @@ private fun classificationCaption(tx: ExpenseTransaction, aiRunning: Boolean): S
     aiRunning -> "AI가 분류하는 중…"
     tx.transferLikely && tx.category == Category.ETC -> "계좌 이동이면 왼쪽으로 밀어주세요"
     tx.classificationSource == ClassificationSource.AI -> "AI가 ${tx.category.label}(으)로 분류했어요"
+    tx.classificationSource == ClassificationSource.APP -> tx.memo ?: "사용한 앱으로 분류했어요"
     tx.classificationSource == ClassificationSource.USER -> "지난번 수정 기록으로 분류했어요"
     tx.category != Category.ETC -> "가맹점 규칙으로 분류했어요"
     else -> "탭해서 카테고리를 정해주세요"
