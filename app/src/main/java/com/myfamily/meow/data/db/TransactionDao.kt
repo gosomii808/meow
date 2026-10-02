@@ -41,6 +41,16 @@ interface TransactionDao {
     @Delete
     suspend fun delete(transaction: ExpenseTransaction)
 
+    @Insert
+    suspend fun insertAll(transactions: List<ExpenseTransaction>)
+
+    /** Debug only: wipe all transactions (raw events are kept). */
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM transactions")
+    suspend fun count(): Int
+
     @Query("SELECT * FROM transactions WHERE status = 'PENDING' ORDER BY transactionTime ASC")
     suspend fun getPending(): List<ExpenseTransaction>
 

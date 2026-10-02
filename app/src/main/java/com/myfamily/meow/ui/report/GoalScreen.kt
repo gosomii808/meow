@@ -60,7 +60,9 @@ private val number = NumberFormat.getNumberInstance(Locale.KOREA)
 fun GoalScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val goals = remember { GoalSettings(context) }
-    val spending by reportViewModel().spending.collectAsStateWithLifecycle()
+    // Goals are month-agnostic; use the current month (first entry) for the "사용" hints.
+    val months by reportViewModel().months.collectAsStateWithLifecycle()
+    val spending = months.firstOrNull() ?: MonthSpending()
     var monthly by remember { mutableStateOf(goals.monthly) }
     val perCategory = remember { mutableStateMapOf<Category, Long>().apply { putAll(goals.categoryGoals()) } }
     val days = spending.month.lengthOfMonth()

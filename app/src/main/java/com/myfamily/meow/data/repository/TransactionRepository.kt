@@ -166,6 +166,13 @@ class TransactionRepository(private val db: AppDatabase) {
         if (transaction.source == TransactionSource.MANUAL) txDao.delete(transaction)
     }
 
+    /** Debug only. */
+    suspend fun debugInsert(transactions: List<ExpenseTransaction>) = txDao.insertAll(transactions)
+
+    suspend fun debugCount(): Int = txDao.count()
+
+    suspend fun debugDeleteAllTransactions() = txDao.deleteAll()
+
     private suspend fun remember(merchant: String, predicted: Category, corrected: Category) {
         val key = merchantKey(merchant)
         correctionDao.insert(

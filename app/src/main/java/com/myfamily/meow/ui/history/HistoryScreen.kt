@@ -1,6 +1,8 @@
 package com.myfamily.meow.ui.history
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +22,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import com.myfamily.meow.ui.theme.Outline
+import com.myfamily.meow.ui.theme.color
+import com.myfamily.meow.ui.theme.pastel
+import com.myfamily.meow.ui.theme.deep
+import com.myfamily.meow.classification.Category
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +60,7 @@ import com.myfamily.meow.data.entity.TransactionStatus
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.calendar.CalendarViewModel
 import com.myfamily.meow.ui.common.BrandLockup
+import com.myfamily.meow.ui.common.CategoryIcon
 import com.myfamily.meow.ui.common.CategoryPill
 import com.myfamily.meow.ui.common.EditAction
 import com.myfamily.meow.ui.common.Pill
@@ -75,6 +88,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
+enum class ViewMode { LIST, FOLDER, CALENDAR }
+
 private val List<ExpenseTransaction>.included get() = filter { it.status == TransactionStatus.INCLUDED }
 private val List<ExpenseTransaction>.spent get() = included.filterNot { it.isIncome }.sumOf { it.amount }
 private val List<ExpenseTransaction>.earned get() = included.filter { it.isIncome }.sumOf { it.amount }
@@ -87,8 +102,9 @@ fun HistoryScreen(onHome: () -> Unit) {
     val month by vm.month.collectAsStateWithLifecycle()
     val byDay by vm.byDay.collectAsStateWithLifecycle()
     val selected by vm.selectedDate.collectAsStateWithLifecycle()
-    var calendarMode by rememberSaveable { mutableStateOf(false) }
+    var viewMode by rememberSaveable { mutableStateOf(ViewMode.LIST) }
     var showExcluded by rememberSaveable { mutableStateOf(false) }
+    var categoryFilter by rememberSaveable { mutableStateOf<Category?>(null) }
     var editing by remember { mutableStateOf<ExpenseTransaction?>(null) }
     var adding by remember { mutableStateOf(false) }
 
@@ -112,28 +128,43 @@ fun HistoryScreen(onHome: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dz))
-        ModeToggle(calendarMode, onChange = { calendarMode = it })
+        ViewModeToggle(viewMode, onChange = { viewMode = it })
         Spacer(Modifier.height(12.dz))
         MonthHeader(month, all.spent, all.earned, vm::previousMonth, vm::nextMonth)
         Spacer(Modifier.height(20.dz))
 
-        if (calendarMode) {
+        // Per-category totals + counts of this month's included spending.
+        val categoryStats = all.included.filterNot { it.isIncome }
+            .groupBy { it.category }
+            .map { (c, v) -> Triple(c, v.sumOf { it.amount }, v.size) }
+            .sortedByDescending { it.second }
+
+        if (viewMode == ViewMode.CALENDAR) {
             MonthGrid(month, byDay, selected, onSelect = { vm.select(if (it == selected) null else it) })
             selected?.let { date ->
                 Spacer(Modifier.height(16.dz))
                 DayDetail(date, byDay[date].orEmpty(), onEdit = { editing = it }, onAdd = { adding = true }, onClose = { vm.select(null) })
             }
+        } else if (viewMode == ViewMode.FOLDER) {
+            CategoryFolders(categoryStats, onOpen = {
+                categoryFilter = it
+                viewMode = ViewMode.LIST
+            })
         } else {
+            CategoryFilter(categoryFilter, categoryStats.map { it.first to it.second }, onSelect = { categoryFilter = it })
+            Spacer(Modifier.height(16.dz))
+
             val days = byDay.keys.sortedDescending()
             val visible = days.mapNotNull { d ->
                 val rows = byDay[d].orEmpty()
                     .filter { showExcluded || it.status == TransactionStatus.INCLUDED }
+                    .filter { categoryFilter == null || it.category == categoryFilter }
                     .sortedByDescending { it.transactionTime } // newest first within the day
                 if (rows.isEmpty()) null else d to rows
             }
             if (visible.isEmpty()) {
                 Text(
-                    "이번 달 반영된 내역이 없어요",
+                    if (categoryFilter == null) "이번 달 반영된 내역이 없어요" else "이 카테고리 내역이 없어요",
                     color = TextMuted,
                     fontSize = 18.sz,
                     textAlign = TextAlign.Center,
@@ -256,31 +287,144 @@ fun HistoryRow(tx: ExpenseTransaction, onClick: (() -> Unit)?) {
     }
 }
 
+/** Dropdown to show only one category's spending (plus "전체"). */
 @Composable
-private fun ModeToggle(calendar: Boolean, onChange: (Boolean) -> Unit) {
+private fun CategoryFilter(
+    selected: Category?,
+    totals: List<Pair<Category, Long>>,
+    onSelect: (Category?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val grand = totals.sumOf { it.second }
+
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dz))
+                .background(Color.White)
+                .border(1.dz, Outline, RoundedCornerShape(16.dz))
+                .clickable { expanded = true }
+                .padding(horizontal = 18.dz, vertical = 12.dz),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selected != null) {
+                Box(Modifier.size(12.dz).clip(RoundedCornerShape(6.dz)).background(selected.color))
+                Spacer(Modifier.width(8.dz))
+            }
+            Text(
+                selected?.label ?: "전체 카테고리",
+                color = TextPrimary,
+                fontSize = 17.sz,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(8.dz))
+            Text(
+                "· ${formatWon(if (selected == null) grand else totals.firstOrNull { it.first == selected }?.second ?: 0)}",
+                color = Pink,
+                fontSize = 16.sz,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = "카테고리 선택", tint = TextSecondary)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { FilterRow(null, "전체 카테고리", grand, totals.sumOf { 1 }) },
+                onClick = { onSelect(null); expanded = false },
+            )
+            totals.forEach { (category, sum) ->
+                DropdownMenuItem(
+                    text = { FilterRow(category, category.label, sum, null) },
+                    onClick = { onSelect(category); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterRow(category: Category?, label: String, amount: Long, count: Int?) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.width(260.dz)) {
+        Box(Modifier.size(12.dz).clip(RoundedCornerShape(6.dz)).background(category?.color ?: TextSecondary))
+        Spacer(Modifier.width(10.dz))
+        Text(label, color = TextPrimary, fontSize = 16.sz, modifier = Modifier.weight(1f))
+        Text(formatWon(amount), color = TextSecondary, fontSize = 15.sz)
+    }
+}
+
+@Composable
+private fun ViewModeToggle(mode: ViewMode, onChange: (ViewMode) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 90.dz)
+            .padding(horizontal = 40.dz)
             .clip(RoundedCornerShape(20.dz))
             .background(PinkSoft)
             .padding(4.dz),
     ) {
-        listOf(false to "목록", true to "캘린더").forEach { (value, label) ->
+        listOf(ViewMode.LIST to "목록", ViewMode.FOLDER to "폴더", ViewMode.CALENDAR to "캘린더").forEach { (value, label) ->
             Text(
                 label,
-                color = if (calendar == value) TextPrimary else TextMuted,
-                fontSize = 17.sz,
-                fontWeight = if (calendar == value) FontWeight.Bold else FontWeight.Normal,
+                color = if (mode == value) TextPrimary else TextMuted,
+                fontSize = 16.sz,
+                fontWeight = if (mode == value) FontWeight.Bold else FontWeight.Normal,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(16.dz))
-                    .background(if (calendar == value) Color.White else Color.Transparent)
+                    .background(if (mode == value) Color.White else Color.Transparent)
                     .clickable { onChange(value) }
                     .padding(vertical = 6.dz),
             )
         }
+    }
+}
+
+/** Gallery-style 2-column grid of categories; tap one to open its time-ordered list. */
+@Composable
+private fun CategoryFolders(stats: List<Triple<Category, Long, Int>>, onOpen: (Category) -> Unit) {
+    if (stats.isEmpty()) {
+        Text(
+            "이번 달 반영된 내역이 없어요",
+            color = TextMuted,
+            fontSize = 18.sz,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 40.dz),
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dz)) {
+        stats.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dz)) {
+                row.forEach { (category, amount, count) ->
+                    FolderCard(category, amount, count, Modifier.weight(1f)) { onOpen(category) }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderCard(category: Category, amount: Long, count: Int, modifier: Modifier, onClick: () -> Unit) {
+    val ink = category.deep
+    Column(
+        modifier
+            .heightIn(min = 150.dz)
+            .shadow(3.dz, RoundedCornerShape(22.dz))
+            .clip(RoundedCornerShape(22.dz))
+            .background(category.pastel)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dz, vertical = 20.dz),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CategoryIcon(category, ink, 34.dz)
+            Spacer(Modifier.width(12.dz))
+            Text(category.label, color = ink, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.weight(1f))
+        Text(formatWon(amount), color = ink, fontSize = 27.sz, fontWeight = FontWeight.Bold)
+        Text("${count}건", color = ink.copy(alpha = 0.7f), fontSize = 15.sz)
     }
 }
 

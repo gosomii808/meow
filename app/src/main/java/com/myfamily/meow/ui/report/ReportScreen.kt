@@ -1,6 +1,14 @@
 package com.myfamily.meow.ui.report
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +47,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +62,6 @@ import com.myfamily.meow.classification.Category
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.BrandLockup
 import com.myfamily.meow.ui.common.DesignButton
-import com.myfamily.meow.ui.common.formatCompact
 import com.myfamily.meow.ui.common.formatWon
 import com.myfamily.meow.ui.theme.Background
 import com.myfamily.meow.ui.theme.DotInactive
@@ -70,6 +78,7 @@ import com.myfamily.meow.ui.theme.color
 import com.myfamily.meow.ui.theme.dz
 import com.myfamily.meow.ui.theme.sz
 import java.time.LocalDate
+import java.time.YearMonth
 
 private val GoalCardBg = Color(0xFFFDF1F3)
 private val GoalCardBorder = Color(0xFFF2D3D9)
@@ -88,7 +97,7 @@ fun reportViewModel(): ReportViewModel {
 fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit) {
     val context = LocalContext.current
     val vm = reportViewModel()
-    val spending by vm.spending.collectAsStateWithLifecycle()
+    val months by vm.months.collectAsStateWithLifecycle()
     val goals = remember { GoalSettings(context) }
     var monthlyGoal by remember { mutableStateOf(goals.monthly) }
     var categoryGoals by remember { mutableStateOf(goals.categoryGoals()) }
@@ -97,6 +106,9 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
         categoryGoals = goals.categoryGoals()
         onPauseOrDispose { }
     }
+    // months is newest-first; show oldest→newest so swiping left moves forward in time.
+    val ordered = months.asReversed()
+    val pager = rememberPagerState(initialPage = (ordered.size - 1).coerceAtLeast(0)) { ordered.size }
 
     Column(
         Modifier
@@ -116,13 +128,64 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(40.dz))
-        GoalCard(spending, monthlyGoal, categoryGoals, onEditGoals)
-        Spacer(Modifier.height(26.dz))
-        SpeedCard(spending, monthlyGoal)
+        Spacer(Modifier.height(16.dz))
+        MonthSwitcher(ordered, pager)
+        Spacer(Modifier.height(16.dz))
+        HorizontalPager(state = pager, verticalAlignment = Alignment.Top) { page ->
+            val spending = ordered[page]
+            Column {
+                GoalCard(spending, monthlyGoal, categoryGoals, onEditGoals)
+                Spacer(Modifier.height(26.dz))
+                SpeedCard(spending, monthlyGoal)
+            }
+        }
         Spacer(Modifier.height(20.dz))
         DesignButton("고양이에게 이 리포트 물어보기 🐾", onChat, container = PinkSoft, heightPx = 64, fontPx = 19)
         Spacer(Modifier.height(40.dz))
+    }
+}
+
+/** Month title with arrows + dots; swipe the pager or tap the arrows. */
+@Composable
+private fun MonthSwitcher(months: List<MonthSpending>, pager: PagerState) {
+    val scope = rememberCoroutineScope()
+    val page = pager.currentPage.coerceIn(0, (months.size - 1).coerceAtLeast(0))
+    val month = months.getOrNull(page)?.month ?: YearMonth.now()
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(
+            onClick = { scope.launch { pager.animateScrollToPage((page - 1).coerceAtLeast(0)) } },
+            enabled = page > 0,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = "이전 달",
+                tint = if (page > 0) TextPrimary else DotInactive,
+            )
+        }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("${month.year}년 ${month.monthValue}월", color = TextPrimary, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dz))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dz)) {
+                months.indices.forEach { i ->
+                    Box(
+                        Modifier
+                            .size(if (i == page) 9.dz else 7.dz)
+                            .clip(CircleShape)
+                            .background(if (i == page) Pink else DotInactive),
+                    )
+                }
+            }
+        }
+        IconButton(
+            onClick = { scope.launch { pager.animateScrollToPage((page + 1).coerceAtMost(months.size - 1)) } },
+            enabled = page < months.size - 1,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "다음 달",
+                tint = if (page < months.size - 1) TextPrimary else DotInactive,
+            )
+        }
     }
 }
 
@@ -256,6 +319,16 @@ private fun CategoryBars(category: Category, spent: Long, goal: Long?, modifier:
 }
 
 /** Cumulative spending this month vs. an even pace toward the goal. */
+/** Smallest clean step whose 4× covers [max], for readable won axis labels. */
+private fun niceStep(max: Long): Long {
+    val steps = longArrayOf(
+        10_000, 20_000, 25_000, 50_000, 100_000, 150_000, 200_000, 250_000,
+        500_000, 750_000, 1_000_000, 1_500_000, 2_000_000, 5_000_000, 10_000_000,
+    )
+    val target = (max + 3) / 4
+    return steps.firstOrNull { it >= target } ?: ((target + 999_999) / 1_000_000 * 1_000_000)
+}
+
 @Composable
 private fun SpeedCard(spending: MonthSpending, goal: Long) {
     val measurer = rememberTextMeasurer()
@@ -280,30 +353,41 @@ private fun SpeedCard(spending: MonthSpending, goal: Long) {
             Legend(ActualLine, "현재 누적 소비")
         }
         Spacer(Modifier.height(10.dz))
-        val axisWidth = 44.dz
         val axisHeight = 18.dz
+        // Round the top of the axis to a clean step so the won labels read nicely.
+        val rawMax = maxOf(goal, cumulative.maxOrNull() ?: 0L, 10_000L)
+        val step = niceStep(rawMax)
+        val yMax = (step * 4).toFloat()
+        val ticks = (0..4).map { it * step }
+        // Left margin wide enough for the full-won labels (no "k"/"만" abbreviation).
+        val density = LocalDensity.current
+        val labelMaxPx = ticks.maxOf { measurer.measure(formatWon(it), labelStyle).size.width }
+        val axisWidth = with(density) { labelMaxPx.toDp() } + 8.dz
         Canvas(Modifier.fillMaxWidth().height(170.dz)) {
             val axisW = axisWidth.toPx()
             val axisH = axisHeight.toPx()
             val w = size.width - axisW
             val h = size.height - axisH
-            val yMax = (maxOf(goal, cumulative.maxOrNull() ?: 0L, 10_000L) * 1.1f)
             fun x(day: Int) = axisW + w * (day - 1) / (days - 1).coerceAtLeast(1)
             fun y(v: Float) = h - h * v / yMax
 
-            for (i in 0..4) {
-                val v = yMax * i / 4
-                val gy = y(v)
+            ticks.forEach { v ->
+                val gy = y(v.toFloat())
                 drawLine(Color(0x22000000), Offset(axisW, gy), Offset(size.width, gy), 1f)
-                val label = measurer.measure(formatCompact(v.toLong()), labelStyle)
+                val label = measurer.measure(formatWon(v), labelStyle)
                 drawText(label, topLeft = Offset(axisW - label.size.width - 6f, gy - label.size.height / 2))
             }
             listOf(1, days / 4, days / 2, days * 3 / 4, days).distinct().filter { it >= 1 }.forEach { d ->
                 val label = measurer.measure("${d}일", labelStyle)
                 drawText(label, topLeft = Offset(x(d) - label.size.width / 2, h + 4f))
             }
-            if (goal > 0) {
-                drawLine(GoalLine, Offset(x(1), y(goal.toFloat() / days)), Offset(x(days), y(goal.toFloat())), 5f, StrokeCap.Round)
+            if (goal > 0 && spending.goalShape.isNotEmpty()) {
+                // Goal pace shaped by the user's weekday spending pattern (steeper on heavy days).
+                val gp = Path().apply {
+                    moveTo(x(1), y(0f))
+                    for (d in 1..days) lineTo(x(d), y(goal * spending.goalShape[d - 1]))
+                }
+                drawPath(gp, GoalLine, style = Stroke(5f, cap = StrokeCap.Round))
             }
             if (cumulative.isNotEmpty()) {
                 val line = Path()
@@ -321,7 +405,8 @@ private fun SpeedCard(spending: MonthSpending, goal: Long) {
             }
         }
         if (goal > 0 && cumulative.isNotEmpty()) {
-            val pace = goal * cumulative.size / days
+            // Expected spend by today, following the weekday-shaped goal curve.
+            val pace = (goal * (spending.goalShape.getOrNull(cumulative.size - 1) ?: (cumulative.size.toFloat() / days))).toLong()
             val diff = cumulative.last() - pace
             Spacer(Modifier.height(8.dz))
             Text(

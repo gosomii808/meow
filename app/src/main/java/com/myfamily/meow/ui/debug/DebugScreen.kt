@@ -96,6 +96,25 @@ fun DebugScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        HorizontalDivider()
+        Text("더미 데이터 (리포트 그래프 테스트용)", style = MaterialTheme.typography.titleMedium)
+        var dummyMsg by remember { mutableStateOf("") }
+        Button(onClick = {
+            scope.launch {
+                val rows = com.myfamily.meow.debug.DummyData.generate()
+                context.repository.debugInsert(rows)
+                dummyMsg = "${rows.size}건 추가됨 (총 ${context.repository.debugCount()}건)"
+            }
+        }) { Text("지난 3개월치 더미 소비 넣기") }
+        OutlinedButton(onClick = {
+            scope.launch {
+                context.repository.debugDeleteAllTransactions()
+                dummyMsg = "모든 소비 기록 삭제됨"
+            }
+        }) { Text("모든 소비 기록 삭제 (원본 알림은 유지)") }
+        if (dummyMsg.isNotEmpty()) Text(dummyMsg, color = TextSecondary, fontSize = 13.sp)
+
+        HorizontalDivider()
         Text("가짜 결제 알림 보내기", style = MaterialTheme.typography.titleMedium)
         Button(onClick = { post(FakePaymentNotifier.CHARGE_SCENARIO) }) { Text("출금 → 충전 → 결제 (10,000원 ×3)") }
         FakePaymentNotifier.SINGLES.forEach { fake ->
