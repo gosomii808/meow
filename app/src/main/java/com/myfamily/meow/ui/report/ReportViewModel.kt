@@ -3,6 +3,7 @@ package com.myfamily.meow.ui.report
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.InsightEngine
 import com.myfamily.meow.analysis.MonthForecaster
 import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
@@ -11,8 +12,10 @@ import com.myfamily.meow.data.repository.TransactionRepository
 import com.myfamily.meow.ui.common.isIncome
 import com.myfamily.meow.ui.common.startMillis
 import com.myfamily.meow.ui.common.toLocalDate
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.DayOfWeek
@@ -66,6 +69,22 @@ class ReportViewModel(repository: TransactionRepository) : ViewModel() {
             MonthForecaster.forecast(rows, today, RecurringDetector.detect(rows))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Monthly goal, pushed in from the screen's SharedPreferences, for goal-aware insights. */
+    private val goal = MutableStateFlow(0L)
+    fun setGoal(value: Long) { goal.value = value }
+
+    /** Top-3 scored insights for the current month (spec F); combines C/D/E results. */
+    val insights: StateFlow<List<InsightEngine.Insight>> = combine(
+        repository.reviewedBetween(current.minusMonths(RECURRING_MONTHS).atDay(1).startMillis(), current.plusMonths(1).atDay(1).startMillis()),
+        goal,
+    ) { rows, monthlyGoal ->
+        val today = java.time.LocalDate.now()
+        val rec = RecurringDetector.detect(rows)
+        val anom = AnomalyDetector.detect(rows, today)
+        val fc = MonthForecaster.forecast(rows, today, rec)
+        InsightEngine.generate(rows, today, monthlyGoal, rec, anom, fc)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Average spend per weekday from history, normalized so the mean is 1 (uniform if empty). */
     private fun weekdayWeights(spent: List<com.myfamily.meow.data.entity.ExpenseTransaction>): Map<DayOfWeek, Float> {

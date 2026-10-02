@@ -6,7 +6,9 @@ import com.myfamily.meow.ai.CatAdvisor
 import com.myfamily.meow.ai.ChatTurn
 import com.myfamily.meow.ai.GemmaEngine
 import com.myfamily.meow.ai.SpendingDigest
+import com.myfamily.meow.analysis.ChatToolExecutor
 import com.myfamily.meow.classification.Category
+import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.data.repository.TransactionRepository
 import com.myfamily.meow.ui.common.startMillis
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +66,13 @@ class ChatViewModel(
         return SpendingDigest.build(rows, today, monthly, perCategory)
     }
 
+    /** Wider window so compare/recurring/forecast tools have history (spec H). */
+    private suspend fun loadToolRows(today: LocalDate): List<ExpenseTransaction> {
+        val from = YearMonth.from(today).minusMonths(TOOL_MONTHS_BACK).atDay(1).startMillis()
+        val to = YearMonth.from(today).plusMonths(1).atDay(1).startMillis()
+        return repository.reviewedBetween(from, to).first()
+    }
+
     private fun greeting(total: String?) =
         if (total != null && total != "0원") {
             "안녕 냥! 이번 달엔 지금까지 ${total} 썼어. 소비 습관이 궁금하면 뭐든 물어봐냥 🐾"
@@ -79,9 +88,11 @@ class ChatViewModel(
         _state.update { it.copy(turns = it.turns + ChatTurn(false, q) + ChatTurn(true, ""), status = CatStatus.THINKING) }
 
         viewModelScope.launch {
-            digest = buildDigest() // pick up anything swiped since the screen opened
+            val today = LocalDate.now()
+            val (monthly, _) = goals()
+            val executor = ChatToolExecutor(loadToolRows(today), today, monthly)
             runCatching {
-                advisor.ask(digest, history, q).collect { partial -> replaceLast(partial) }
+                advisor.answer(executor, today, history, q).collect { partial -> replaceLast(partial) }
             }.onFailure { e ->
                 replaceLast("앗, 생각하다가 졸았다냥… 다시 물어봐 줄래? (${e.message ?: "오류"})")
             }
@@ -95,5 +106,9 @@ class ChatViewModel(
 
     private fun replaceLast(text: String) {
         _state.update { s -> s.copy(turns = s.turns.dropLast(1) + ChatTurn(true, text.trim())) }
+    }
+
+    private companion object {
+        const val TOOL_MONTHS_BACK = 6L
     }
 }

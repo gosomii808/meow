@@ -60,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.InsightEngine
 import com.myfamily.meow.analysis.MonthForecaster
 import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
@@ -105,12 +106,14 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
     val recurring by vm.recurring.collectAsStateWithLifecycle()
     val anomalies by vm.anomalies.collectAsStateWithLifecycle()
     val forecast by vm.forecast.collectAsStateWithLifecycle()
+    val insights by vm.insights.collectAsStateWithLifecycle()
     val goals = remember { GoalSettings(context) }
     var monthlyGoal by remember { mutableStateOf(goals.monthly) }
     var categoryGoals by remember { mutableStateOf(goals.categoryGoals()) }
     LifecycleResumeEffect(Unit) {
         monthlyGoal = goals.monthly
         categoryGoals = goals.categoryGoals()
+        vm.setGoal(monthlyGoal)
         onPauseOrDispose { }
     }
     // months is newest-first; show oldest→newest so swiping left moves forward in time.
@@ -147,6 +150,10 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
                 val isCurrentMonth = spending.month == YearMonth.now()
                 SpeedCard(spending, monthlyGoal, if (isCurrentMonth) forecast else null)
             }
+        }
+        if (insights.isNotEmpty()) {
+            Spacer(Modifier.height(26.dz))
+            InsightsCard(insights)
         }
         if (anomalies.isNotEmpty()) {
             Spacer(Modifier.height(26.dz))
@@ -202,6 +209,30 @@ private fun MonthSwitcher(months: List<MonthSpending>, pager: PagerState) {
                 contentDescription = "다음 달",
                 tint = if (page < months.size - 1) TextPrimary else DotInactive,
             )
+        }
+    }
+}
+
+/** Top-3 scored insights (spec F). The cat chatbot rephrases these; here we show the raw facts. */
+@Composable
+private fun InsightsCard(items: List<InsightEngine.Insight>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dz))
+            .background(GoalCardBg)
+            .border(1.dz, GoalCardBorder, RoundedCornerShape(12.dz))
+            .padding(horizontal = 20.dz, vertical = 18.dz),
+        verticalArrangement = Arrangement.spacedBy(14.dz),
+    ) {
+        Text("이번 달 소비 인사이트", color = TextPrimary, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+        items.forEach { insight ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dz)) {
+                Text(insight.summary, color = TextPrimary, fontSize = 16.sz, fontWeight = FontWeight.Medium)
+                if (insight.figures.isNotEmpty()) {
+                    Text(insight.figures.joinToString(" · "), color = TextSecondary, fontSize = 14.sz)
+                }
+            }
         }
     }
 }
