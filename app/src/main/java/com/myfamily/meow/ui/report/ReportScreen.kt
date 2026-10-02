@@ -44,6 +44,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.MonthForecaster
 import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.repository
@@ -102,6 +104,7 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
     val months by vm.months.collectAsStateWithLifecycle()
     val recurring by vm.recurring.collectAsStateWithLifecycle()
     val anomalies by vm.anomalies.collectAsStateWithLifecycle()
+    val forecast by vm.forecast.collectAsStateWithLifecycle()
     val goals = remember { GoalSettings(context) }
     var monthlyGoal by remember { mutableStateOf(goals.monthly) }
     var categoryGoals by remember { mutableStateOf(goals.categoryGoals()) }
@@ -140,7 +143,9 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
             Column {
                 GoalCard(spending, monthlyGoal, categoryGoals, onEditGoals)
                 Spacer(Modifier.height(26.dz))
-                SpeedCard(spending, monthlyGoal)
+                // Forecast only applies to the current month; past months pass null.
+                val isCurrentMonth = spending.month == YearMonth.now()
+                SpeedCard(spending, monthlyGoal, if (isCurrentMonth) forecast else null)
             }
         }
         if (anomalies.isNotEmpty()) {
@@ -403,13 +408,15 @@ private fun niceStep(max: Long): Long {
 }
 
 @Composable
-private fun SpeedCard(spending: MonthSpending, goal: Long) {
+private fun SpeedCard(spending: MonthSpending, goal: Long, forecast: MonthForecaster.Forecast? = null) {
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = TextMuted, fontSize = 11.sz)
     val days = spending.daily.size
     val today = LocalDate.now()
     val shownDays = if (spending.month.year == today.year && spending.month.month == today.month) today.dayOfMonth else days
     val cumulative = spending.daily.runningReduce { a, b -> a + b }.take(shownDays)
+    // Only draw the fan-out band when there's real forecast data and room left in the month.
+    val band = forecast?.takeIf { it.hasEnoughData && shownDays < days }
 
     Column(
         Modifier
@@ -428,7 +435,7 @@ private fun SpeedCard(spending: MonthSpending, goal: Long) {
         Spacer(Modifier.height(10.dz))
         val axisHeight = 18.dz
         // Round the top of the axis to a clean step so the won labels read nicely.
-        val rawMax = maxOf(goal, cumulative.maxOrNull() ?: 0L, 10_000L)
+        val rawMax = maxOf(goal, cumulative.maxOrNull() ?: 0L, band?.p90 ?: 0L, 10_000L)
         val step = niceStep(rawMax)
         val yMax = (step * 4).toFloat()
         val ticks = (0..4).map { it * step }
@@ -462,6 +469,28 @@ private fun SpeedCard(spending: MonthSpending, goal: Long) {
                 }
                 drawPath(gp, GoalLine, style = Stroke(5f, cap = StrokeCap.Round))
             }
+            // Forecast band: fan out from today's cumulative point to the month-end P10–P90 range.
+            if (band != null && cumulative.isNotEmpty()) {
+                val startX = x(shownDays)
+                val startY = y(cumulative.last().toFloat())
+                val endX = x(days)
+                val fan = Path().apply {
+                    moveTo(startX, startY)
+                    lineTo(endX, y(band.p90.toFloat()))
+                    lineTo(endX, y(band.p10.toFloat()))
+                    close()
+                }
+                drawPath(fan, ActualLine.copy(alpha = 0.18f))
+                val median = Path().apply {
+                    moveTo(startX, startY)
+                    lineTo(endX, y(band.p50.toFloat()))
+                }
+                drawPath(
+                    median,
+                    ActualLine.copy(alpha = 0.6f),
+                    style = Stroke(4f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))),
+                )
+            }
             if (cumulative.isNotEmpty()) {
                 val line = Path()
                 cumulative.forEachIndexed { i, v ->
@@ -488,6 +517,20 @@ private fun SpeedCard(spending: MonthSpending, goal: Long) {
                 fontSize = 15.sz,
                 fontWeight = FontWeight.SemiBold,
             )
+        }
+        // Month-end forecast range (spec E), only for the current month.
+        if (forecast != null && shownDays < days) {
+            Spacer(Modifier.height(6.dz))
+            if (forecast.hasEnoughData) {
+                Text(
+                    "이 속도면 월말 ${formatWon(forecast.p10)}~${formatWon(forecast.p90)}" +
+                        if (goal > 0) " (목표 ${formatWon(goal)})" else "",
+                    color = TextSecondary,
+                    fontSize = 14.sz,
+                )
+            } else {
+                Text("월말 예측은 데이터를 모으는 중이에요", color = TextMuted, fontSize = 14.sz)
+            }
         }
     }
 }

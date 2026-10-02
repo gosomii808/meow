@@ -3,6 +3,7 @@ package com.myfamily.meow.ui.report
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.MonthForecaster
 import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.data.entity.TransactionStatus
@@ -56,6 +57,15 @@ class ReportViewModel(repository: TransactionRepository) : ViewModel() {
         .reviewedBetween(current.minusMonths(RECURRING_MONTHS).atDay(1).startMillis(), current.plusMonths(1).atDay(1).startMillis())
         .map { AnomalyDetector.detect(it, java.time.LocalDate.now()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Month-end spending forecast (P10/P50/P90) for the current month only (spec E). */
+    val forecast: StateFlow<MonthForecaster.Forecast?> = repository
+        .reviewedBetween(current.minusMonths(RECURRING_MONTHS).atDay(1).startMillis(), current.plusMonths(1).atDay(1).startMillis())
+        .map { rows ->
+            val today = java.time.LocalDate.now()
+            MonthForecaster.forecast(rows, today, RecurringDetector.detect(rows))
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Average spend per weekday from history, normalized so the mean is 1 (uniform if empty). */
     private fun weekdayWeights(spent: List<com.myfamily.meow.data.entity.ExpenseTransaction>): Map<DayOfWeek, Float> {
