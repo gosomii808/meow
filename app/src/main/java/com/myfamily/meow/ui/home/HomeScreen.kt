@@ -32,8 +32,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -88,19 +90,21 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(context.repository) } })
     val s by vm.summary.collectAsStateWithLifecycle()
 
+    Box(Modifier.fillMaxSize().background(HomeBackground)) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(HomeBackground)
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dz),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.height(20.dz))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BrandLockup(Modifier.weight(1f).padding(top = 6.dz), catPx = 42, fontPx = 22)
             if (BuildConfig.DEBUG) {
                 TextButton(onClick = onDebug) { Text("DEV", color = TextMuted, fontSize = 13.sz) }
             }
             IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "설정", tint = TextMuted) }
         }
+        Spacer(Modifier.weight(0.55f))
 
         if (!listenerOn) {
             Text(
@@ -117,7 +121,7 @@ fun HomeScreen(
         }
 
         // Greeting with the cat-in-wallet illustration overlapping the summary card.
-        Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().zIndex(1f)) {
             Column(Modifier.padding(top = 50.dz)) {
                 Text("안녕하세요!", color = PinkMuted, fontSize = 19.sz)
                 Spacer(Modifier.height(4.dz))
@@ -132,18 +136,16 @@ fun HomeScreen(
                 Text("직접 확인할 내역 ${s.pending}건", color = TextSecondary, fontSize = 17.sz)
                 Spacer(Modifier.height(30.dz))
             }
-            Image(
-                painterResource(R.drawable.home_cat_wallet),
-                contentDescription = null,
+            AnimatedHomeCat(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .offset(x = 6.dz, y = 4.dz)
-                    .size(width = 147.dz, height = 148.dz),
+                    .size(width = 160.dz, height = 150.dz),
             )
         }
 
         SummaryCard(s)
-        Spacer(Modifier.height(24.dz))
+        Spacer(Modifier.height(22.dz))
 
         Row(
             Modifier
@@ -166,12 +168,25 @@ fun HomeScreen(
             }
             SmallAction("분석 리포트", MintSoft, Modifier.weight(1f), onReport) { TargetIcon() }
         }
-        Spacer(Modifier.height(16.dz))
-        AskCatCard(onChat)
+        Spacer(Modifier.weight(1f))
+    }
+        CatChatFab(onChat, Modifier.align(Alignment.BottomEnd).padding(24.dz))
+    }
+}
 
-        Spacer(Modifier.height(48.dz))
-        BrandLockup(Modifier.align(Alignment.CenterHorizontally), catPx = 48, fontPx = 24)
-        Spacer(Modifier.height(32.dz))
+/** Round floating button at the bottom-right that summons the cat chatbot (Figma chatbot art). */
+@Composable
+private fun CatChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(70.dz)
+            .shadow(8.dz, CircleShape)
+            .clip(CircleShape)
+            .background(Pink)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(painterResource(R.drawable.chatbot_icon), contentDescription = "고양이 상담소", modifier = Modifier.size(44.dz))
     }
 }
 
@@ -182,21 +197,11 @@ private fun SummaryCard(s: HomeSummary) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dz))
             .background(PinkSoft)
-            .padding(horizontal = 24.dz, vertical = 20.dz),
-        verticalArrangement = Arrangement.spacedBy(14.dz),
+            .padding(horizontal = 24.dz, vertical = 24.dz),
+        verticalArrangement = Arrangement.spacedBy(18.dz),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("오늘의 소비 요약", color = TitleColor, fontSize = 19.sz, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Text(
-                "✦ AI 정리",
-                color = MintText,
-                fontSize = 14.sz,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dz))
-                    .background(MintChip)
-                    .padding(horizontal = 12.dz, vertical = 6.dz),
-            )
         }
         SummaryRow(
             icon = { IconBadge(PinkIconBg) { Icon(Icons.AutoMirrored.Filled.List, null, tint = Pink, modifier = Modifier.size(20.dz)) } },
@@ -269,29 +274,6 @@ private fun SmallAction(label: String, bg: Color, modifier: Modifier, onClick: (
         Spacer(Modifier.width(10.dz))
         Text(label, color = TitleColor, fontSize = 17.sz, fontWeight = FontWeight.Bold)
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TitleColor, modifier = Modifier.size(22.dz))
-    }
-}
-
-/** Entry to the on-device cat chatbot (not in the Figma file; same tone as the summary card). */
-@Composable
-private fun AskCatCard(onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dz))
-            .background(Color.White)
-            .border(1.5.dz, PinkSoft, RoundedCornerShape(20.dz))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dz, vertical = 14.dz),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CatFace(52.dz)
-        Spacer(Modifier.width(12.dz))
-        Column(Modifier.weight(1f)) {
-            Text("고양이 상담소", color = TitleColor, fontSize = 18.sz, fontWeight = FontWeight.Bold)
-            Text("내 소비 습관, 고양이에게 물어봐요", color = TextSecondary, fontSize = 15.sz)
-        }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TitleColor, modifier = Modifier.size(24.dz))
     }
 }
 
