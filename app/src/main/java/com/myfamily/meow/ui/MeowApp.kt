@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.notification.NotificationAccess
+import com.myfamily.meow.ui.chat.ChatScreen
 import com.myfamily.meow.ui.common.BrandLockup
 import com.myfamily.meow.ui.debug.DebugScreen
 import com.myfamily.meow.ui.history.HistoryScreen
@@ -36,7 +37,7 @@ private const val PREFS = "meow_prefs"
 // v2: the Figma onboarding (tutorial + signup) replaced the first one, so show it again once.
 private const val KEY_ONBOARDED = "onboarding_done_v2"
 
-private enum class Screen { HOME, SWIPE, HISTORY, REPORT, GOALS, SETTINGS, DEBUG }
+private enum class Screen { HOME, SWIPE, HISTORY, REPORT, GOALS, CHAT, SETTINGS, DEBUG }
 
 @Composable
 fun MeowApp() {
@@ -82,13 +83,15 @@ private fun MainScreen() {
             onStartSwipe = { screen = Screen.SWIPE },
             onHistory = { screen = Screen.HISTORY },
             onReport = { screen = Screen.REPORT },
+            onChat = { screen = Screen.CHAT },
             onSettings = { screen = Screen.SETTINGS },
             onDebug = { screen = Screen.DEBUG },
             onFixListener = { context.startActivity(NotificationAccess.fallbackIntent()) },
         )
         Screen.SWIPE -> ReviewScreen(onDone = home)
         Screen.HISTORY -> HistoryScreen(onHome = home)
-        Screen.REPORT -> ReportScreen(onHome = home, onEditGoals = { screen = Screen.GOALS })
+        Screen.REPORT -> ReportScreen(onHome = home, onEditGoals = { screen = Screen.GOALS }, onChat = { screen = Screen.CHAT })
+        Screen.CHAT -> ChatScreen(onHome = home)
         Screen.GOALS -> GoalScreen(onBack = { screen = Screen.REPORT })
         Screen.SETTINGS -> WithHeader(home) { SettingsScreen() }
         Screen.DEBUG -> WithHeader(home) { DebugScreen() }

@@ -12,7 +12,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.myfamily.meow.ai.GemmaClassifier
+import com.myfamily.meow.gemmaEngine
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.classification.ClassificationInput
 import kotlinx.coroutines.launch
@@ -31,11 +31,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun AiTestScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val classifier = remember { GemmaClassifier(context.applicationContext) }
-    DisposableEffect(Unit) { onDispose { classifier.close() } }
+    val engine = context.gemmaEngine
+    val classifier = remember { GemmaClassifier(engine) }
     val scope = rememberCoroutineScope()
 
-    val modelFile = classifier.modelFile
+    val modelFile = engine.modelFile
     val modelInfo = if (modelFile.exists()) {
         "있음 (${modelFile.length() / 1_000_000}MB)"
     } else {
@@ -67,9 +67,9 @@ fun AiTestScreen(modifier: Modifier = Modifier) {
                     engineStatus = "로드 중… (최대 십수 초)"
                     val started = System.currentTimeMillis()
                     engineStatus = try {
-                        classifier.initialize()
+                        engine.load()
                         loaded = true
-                        "${classifier.backendName} 로드 완료 (${System.currentTimeMillis() - started}ms)"
+                        "${engine.backendName} 로드 완료 (${System.currentTimeMillis() - started}ms)"
                     } catch (e: Exception) {
                         "실패: ${e.describe()}"
                     }

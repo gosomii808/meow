@@ -1,6 +1,5 @@
 package com.myfamily.meow.ai
 
-import android.content.Context
 import com.myfamily.meow.classification.ClassificationInput
 import com.myfamily.meow.data.repository.TransactionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,15 +11,15 @@ import kotlinx.coroutines.sync.withLock
  * Step ⑤ of the classification chain. Runs Gemma over pending rows that history and rules
  * left as 기타. App-scoped so the ~5 s model load happens once per process.
  */
-class AiCategorizer(context: Context, private val repository: TransactionRepository) {
-    private val classifier = GemmaClassifier(context)
+class AiCategorizer(private val engine: GemmaEngine, private val repository: TransactionRepository) {
+    private val classifier = GemmaClassifier(engine)
     private val mutex = Mutex()
 
     private val _runningIds = MutableStateFlow<Set<Long>>(emptySet())
     /** Rows currently queued for or being classified, for the "AI 분류 중…" caption. */
     val runningIds = _runningIds.asStateFlow()
 
-    val isAvailable: Boolean get() = classifier.modelFile.exists()
+    val isAvailable: Boolean get() = engine.isAvailable
 
     suspend fun classifyPending() {
         if (!isAvailable) return

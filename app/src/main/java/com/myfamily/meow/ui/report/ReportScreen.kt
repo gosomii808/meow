@@ -52,11 +52,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.BrandLockup
+import com.myfamily.meow.ui.common.DesignButton
 import com.myfamily.meow.ui.common.formatCompact
 import com.myfamily.meow.ui.common.formatWon
 import com.myfamily.meow.ui.theme.Background
 import com.myfamily.meow.ui.theme.DotInactive
 import com.myfamily.meow.ui.theme.Pink
+import com.myfamily.meow.ui.theme.PinkSoft
 import com.myfamily.meow.ui.theme.SpeedBg
 import com.myfamily.meow.ui.theme.SpeedBorder
 import com.myfamily.meow.ui.theme.SwipeExclude
@@ -83,7 +85,7 @@ fun reportViewModel(): ReportViewModel {
 
 /** Figma 분석 리포트 frame. The design's charts are images; here they are drawn from real data. */
 @Composable
-fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit) {
+fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit) {
     val context = LocalContext.current
     val vm = reportViewModel()
     val spending by vm.spending.collectAsStateWithLifecycle()
@@ -118,6 +120,8 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit) {
         GoalCard(spending, monthlyGoal, categoryGoals, onEditGoals)
         Spacer(Modifier.height(26.dz))
         SpeedCard(spending, monthlyGoal)
+        Spacer(Modifier.height(20.dz))
+        DesignButton("고양이에게 이 리포트 물어보기 🐾", onChat, container = PinkSoft, heightPx = 64, fontPx = 19)
         Spacer(Modifier.height(40.dz))
     }
 }

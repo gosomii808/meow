@@ -3,6 +3,7 @@ package com.myfamily.meow.ui.home
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,7 @@ import com.myfamily.meow.BuildConfig
 import com.myfamily.meow.R
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.BrandLockup
+import com.myfamily.meow.ui.common.CatFace
 import com.myfamily.meow.ui.theme.HomeBackground
 import com.myfamily.meow.ui.theme.MintChip
 import com.myfamily.meow.ui.theme.MintIconBg
@@ -77,6 +79,7 @@ fun HomeScreen(
     onStartSwipe: () -> Unit,
     onHistory: () -> Unit,
     onReport: () -> Unit,
+    onChat: () -> Unit,
     onSettings: () -> Unit,
     onDebug: () -> Unit,
     onFixListener: () -> Unit,
@@ -163,6 +166,8 @@ fun HomeScreen(
             }
             SmallAction("분석 리포트", MintSoft, Modifier.weight(1f), onReport) { TargetIcon() }
         }
+        Spacer(Modifier.height(16.dz))
+        AskCatCard(onChat)
 
         Spacer(Modifier.height(48.dz))
         BrandLockup(Modifier.align(Alignment.CenterHorizontally), catPx = 48, fontPx = 24)
@@ -264,6 +269,29 @@ private fun SmallAction(label: String, bg: Color, modifier: Modifier, onClick: (
         Spacer(Modifier.width(10.dz))
         Text(label, color = TitleColor, fontSize = 17.sz, fontWeight = FontWeight.Bold)
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TitleColor, modifier = Modifier.size(22.dz))
+    }
+}
+
+/** Entry to the on-device cat chatbot (not in the Figma file; same tone as the summary card). */
+@Composable
+private fun AskCatCard(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dz))
+            .background(Color.White)
+            .border(1.5.dz, PinkSoft, RoundedCornerShape(20.dz))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dz, vertical = 14.dz),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CatFace(52.dz)
+        Spacer(Modifier.width(12.dz))
+        Column(Modifier.weight(1f)) {
+            Text("고양이 상담소", color = TitleColor, fontSize = 18.sz, fontWeight = FontWeight.Bold)
+            Text("내 소비 습관, 고양이에게 물어봐요", color = TextSecondary, fontSize = 15.sz)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TitleColor, modifier = Modifier.size(24.dz))
     }
 }
 
