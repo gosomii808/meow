@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myfamily.meow.BuildConfig
 import com.myfamily.meow.R
+import com.myfamily.meow.analysis.SpendingTendency
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.BrandLockup
 import com.myfamily.meow.ui.common.CatFace
@@ -89,6 +90,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(context.repository) } })
     val s by vm.summary.collectAsStateWithLifecycle()
+    val tendency by vm.tendency.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().background(HomeBackground)) {
     Column(
@@ -134,6 +136,10 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(10.dz))
                 Text("직접 확인할 내역 ${s.pending}건", color = TextSecondary, fontSize = 17.sz)
+                if (tendency.hasEnoughData) {
+                    Spacer(Modifier.height(10.dz))
+                    TendencyBadge(tendency.tendency)
+                }
                 Spacer(Modifier.height(30.dz))
             }
             AnimatedHomeCat(
@@ -174,6 +180,20 @@ fun HomeScreen(
     }
 }
 
+/** Small pill showing the cat's spending personality and its matching prop (spec J). */
+@Composable
+private fun TendencyBadge(tendency: SpendingTendency.Tendency) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(PinkSoft)
+            .padding(horizontal = 14.dz, vertical = 7.dz),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${tendency.emoji} 오늘의 소비 성향 · ${tendency.label}", color = Pink, fontSize = 14.sz, fontWeight = FontWeight.Bold)
+    }
+}
+
 /** Round floating button at the bottom-right that summons the cat chatbot (Figma chatbot art). */
 @Composable
 private fun CatChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -182,11 +202,11 @@ private fun CatChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .size(70.dz)
             .shadow(8.dz, CircleShape)
             .clip(CircleShape)
-            .background(Pink)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Image(painterResource(R.drawable.chatbot_icon), contentDescription = "고양이 상담소", modifier = Modifier.size(44.dz))
+        // The Figma art is already a full pink round button with the white chat icon.
+        Image(painterResource(R.drawable.chatbot), contentDescription = "고양이 상담소", modifier = Modifier.fillMaxSize())
     }
 }
 

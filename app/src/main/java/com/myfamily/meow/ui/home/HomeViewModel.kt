@@ -2,6 +2,7 @@ package com.myfamily.meow.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.myfamily.meow.analysis.SpendingTendency
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.data.entity.TransactionSource
 import com.myfamily.meow.data.repository.TransactionRepository
@@ -10,6 +11,7 @@ import com.myfamily.meow.ui.common.startMillis
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
@@ -39,4 +41,10 @@ class HomeViewModel(repository: TransactionRepository) : ViewModel() {
             suspicious = pending.count { it.duplicateGroupId != null || it.transferLikely },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeSummary())
+
+    /** The cat's spending personality over the last 30 days (spec J). */
+    val tendency: StateFlow<SpendingTendency.Result> = repository
+        .reviewedBetween(today.minusDays(30).startMillis(), today.plusDays(1).startMillis())
+        .map { SpendingTendency.analyze(it, today) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SpendingTendency.Result(SpendingTendency.Tendency.BALANCED, false))
 }
