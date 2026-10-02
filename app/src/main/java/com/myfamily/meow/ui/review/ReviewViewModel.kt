@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
+enum class SwipeAction { INCLUDE, EXCLUDE, SETTLE }
+
 class ReviewViewModel(
     private val repository: TransactionRepository,
     private val aiCategorizer: AiCategorizer,
@@ -32,32 +34,12 @@ class ReviewViewModel(
     private val _summaryDismissed = MutableStateFlow(false)
     val summaryDismissed = _summaryDismissed.asStateFlow()
 
-    data class Swipe(val transaction: ExpenseTransaction, val include: Boolean)
+    /** [snapshot] is the row before the decision, restored as-is on undo. */
+    data class Swipe(val snapshot: ExpenseTransaction, val action: SwipeAction)
 
     private val _lastSwiped = MutableStateFlow<Swipe?>(null)
-    /** Most recent swipe, offered for undo. */
+    /** Most recent decision, offered for undo. */
     val lastSwiped = _lastSwiped.asStateFlow()
-
-    fun swipe(transaction: ExpenseTransaction, include: Boolean) {
-        _summaryDismissed.value = false
-        _lastSwiped.value = Swipe(transaction, include)
-        viewModelScope.launch {
-            repository.setStatus(
-                transaction.id,
-                if (include) TransactionStatus.INCLUDED else TransactionStatus.EXCLUDED,
-            )
-        }
-    }
-
-    fun undo() {
-        val transaction = _lastSwiped.value?.transaction ?: return
-        _lastSwiped.value = null
-        viewModelScope.launch { repository.setStatus(transaction.id, TransactionStatus.PENDING) }
-    }
-
-    fun clearUndo() {
-        _lastSwiped.value = null
-    }
 
     /** Pending ids the on-device model is still working on. */
     val aiRunningIds = aiCategorizer.runningIds
@@ -70,6 +52,34 @@ class ReviewViewModel(
                 .distinctUntilChanged()
                 .collect { aiCategorizer.classifyPending() }
         }
+    }
+
+    fun decide(transaction: ExpenseTransaction, include: Boolean) {
+        record(transaction, if (include) SwipeAction.INCLUDE else SwipeAction.EXCLUDE)
+        viewModelScope.launch {
+            repository.setStatus(transaction.id, if (include) TransactionStatus.INCLUDED else TransactionStatus.EXCLUDED)
+        }
+    }
+
+    /** Up swipe: keep only my share of a bill split among [people]. */
+    fun settle(transaction: ExpenseTransaction, people: Int) {
+        record(transaction, SwipeAction.SETTLE)
+        viewModelScope.launch { repository.settle(transaction, people) }
+    }
+
+    private fun record(transaction: ExpenseTransaction, action: SwipeAction) {
+        _summaryDismissed.value = false
+        _lastSwiped.value = Swipe(transaction, action)
+    }
+
+    fun undo() {
+        val swipe = _lastSwiped.value ?: return
+        _lastSwiped.value = null
+        viewModelScope.launch { repository.restore(swipe.snapshot) }
+    }
+
+    fun clearUndo() {
+        _lastSwiped.value = null
     }
 
     fun saveEdit(original: ExpenseTransaction, edited: ExpenseTransaction) {

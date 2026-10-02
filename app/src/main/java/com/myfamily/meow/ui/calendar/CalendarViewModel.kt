@@ -3,6 +3,7 @@ package com.myfamily.meow.ui.calendar
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myfamily.meow.data.entity.ExpenseTransaction
+import com.myfamily.meow.data.entity.TransactionStatus
 import com.myfamily.meow.data.repository.TransactionRepository
 import com.myfamily.meow.ui.common.startMillis
 import com.myfamily.meow.ui.common.toLocalDate
@@ -25,11 +26,11 @@ class CalendarViewModel(private val repository: TransactionRepository) : ViewMod
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     val selectedDate = _selectedDate.asStateFlow()
 
-    /** Included transactions of the shown month, grouped by day. */
+    /** Reviewed rows (included and excluded) of the shown month, grouped by day. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val byDay: StateFlow<Map<LocalDate, List<ExpenseTransaction>>> = _month
         .flatMapLatest { ym ->
-            repository.includedBetween(ym.atDay(1).startMillis(), ym.plusMonths(1).atDay(1).startMillis())
+            repository.reviewedBetween(ym.atDay(1).startMillis(), ym.plusMonths(1).atDay(1).startMillis())
         }
         .map { list -> list.groupBy { it.transactionTime.toLocalDate() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -48,5 +49,17 @@ class CalendarViewModel(private val repository: TransactionRepository) : ViewMod
 
     fun addManual(transaction: ExpenseTransaction) {
         viewModelScope.launch { repository.addManual(transaction) }
+    }
+
+    fun saveEdit(original: ExpenseTransaction, edited: ExpenseTransaction) {
+        viewModelScope.launch { repository.saveEdit(original, edited) }
+    }
+
+    fun setStatus(transaction: ExpenseTransaction, status: TransactionStatus) {
+        viewModelScope.launch { repository.changeReviewedStatus(transaction, status) }
+    }
+
+    fun delete(transaction: ExpenseTransaction) {
+        viewModelScope.launch { repository.deleteManual(transaction) }
     }
 }

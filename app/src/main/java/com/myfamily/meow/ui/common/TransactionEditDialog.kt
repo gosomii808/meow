@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -20,10 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.data.entity.ClassificationSource
+import com.myfamily.meow.data.entity.Direction
 import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.data.entity.TransactionSource
 import java.time.Instant
@@ -32,8 +35,11 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** Extra button in the edit dialog, e.g. "제외하기" for an already reviewed row. */
+data class EditAction(val label: String, val color: Color? = null, val onClick: () -> Unit)
+
 /**
- * Edits an existing candidate ([initial] non-null) or creates a manual record on [date].
+ * Edits an existing row ([initial] non-null) or creates a manual record on [date].
  * Amount and category are required (spec §15).
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -43,6 +49,7 @@ fun TransactionEditDialog(
     date: LocalDate,
     onDismiss: () -> Unit,
     onSave: (ExpenseTransaction) -> Unit,
+    actions: List<EditAction> = emptyList(),
 ) {
     val zone = ZoneId.systemDefault()
     val timeFormat = remember { DateTimeFormatter.ofPattern("HH:mm") }
@@ -107,6 +114,14 @@ fun TransactionEditDialog(
                     label = { Text("메모") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (actions.isNotEmpty()) {
+                    HorizontalDivider()
+                    actions.forEach { action ->
+                        TextButton(onClick = action.onClick) {
+                            Text(action.label, color = action.color ?: MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -125,6 +140,7 @@ fun TransactionEditDialog(
                     val categoryChanged = category != base.category || initial == null
                     onSave(
                         base.copy(
+                            direction = Direction.EXPENSE,
                             amount = parsedAmount!!,
                             merchant = merchant.trim().ifEmpty { "직접 입력" },
                             transactionTime = millis,

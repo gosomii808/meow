@@ -27,6 +27,22 @@ class NotificationParserTest {
     fun tossPersonTransfer() = assertEquals(ParsedPayment(15_000, "홍길동"), parse(FakePaymentNotifier.SINGLES[4]))
 
     @Test
+    fun tossDepositIsRecognizedAsIncome() =
+        assertTrue(NotificationParser.parse("30,000원 입금", "홍길동 → 내 토스뱅크 통장")!!.isIncome)
+
+    @Test
+    fun cardCancellationIsIncome() = assertEquals(
+        ParsedPayment(5_500, "스타벅스 강남점", isIncome = true),
+        NotificationParser.parse("KB국민카드", "KB국민카드(1234)승인취소 홍*동 5,500원 10/02 09:10 스타벅스 강남점"),
+    )
+
+    @Test
+    fun outgoingIsNotIncome() {
+        val parsed = FakePaymentNotifier.SINGLES.map(::parse) + FakePaymentNotifier.CHARGE_SCENARIO.map(::parse)
+        assertTrue(parsed.none { it!!.isIncome })
+    }
+
+    @Test
     fun sentenceStyleTransfer() =
         assertEquals(ParsedPayment(15_000, "홍길동"), NotificationParser.parse("토스", "홍길동님에게 15,000원을 보냈어요"))
 

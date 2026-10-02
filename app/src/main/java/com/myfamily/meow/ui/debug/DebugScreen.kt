@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -17,13 +18,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -32,12 +36,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.debug.FakePaymentNotifier
+import com.myfamily.meow.notification.Diagnostics
 import com.myfamily.meow.notification.NotificationAccess
 import com.myfamily.meow.reminder.DailyReviewScheduler
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.formatTime
 import com.myfamily.meow.ui.theme.Surface
 import com.myfamily.meow.ui.theme.TextSecondary
+import kotlinx.coroutines.launch
 
 /** Debug-build tools: fake payment notifications, captured raw notifications, AI test. */
 @Composable
@@ -72,6 +78,9 @@ fun DebugScreen(modifier: Modifier = Modifier) {
     }
 
     val rawEvents by remember { context.repository.recentRawEvents() }.collectAsState(initial = emptyList())
+    val logs by remember { context.repository.recentLogs() }.collectAsState(initial = emptyList())
+    var diagnosticsOn by remember { mutableStateOf(Diagnostics.isEnabled(context)) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier
@@ -95,6 +104,39 @@ fun DebugScreen(modifier: Modifier = Modifier) {
 
         OutlinedButton(onClick = { DailyReviewScheduler.runNow(context) }) { Text("검토 알림 지금 보내기 (남은 건 있을 때)") }
         OutlinedButton(onClick = { showAi = true }) { Text("Gemma 분류 테스트 열기") }
+
+        HorizontalDivider()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("알림 진단 모드", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "모든 앱의 돈 관련 알림을 버린 이유와 함께 기록해요 (기기 안에만 저장)",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                )
+            }
+            Switch(checked = diagnosticsOn, onCheckedChange = {
+                Diagnostics.setEnabled(context, it)
+                diagnosticsOn = it
+            })
+        }
+        if (logs.isNotEmpty()) {
+            OutlinedButton(onClick = { scope.launch { context.repository.clearLogs() } }) { Text("진단 기록 지우기 (${logs.size})") }
+        }
+        logs.forEach { log ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Surface)
+                    .padding(10.dp),
+            ) {
+                Text("${formatTime(log.postedAt)} · ${log.packageName}", color = TextSecondary, fontSize = 12.sp)
+                Text(log.title, fontSize = 14.sp)
+                Text(log.text, fontSize = 13.sp, color = TextSecondary)
+                Text("→ ${log.decision}", fontSize = 13.sp)
+            }
+        }
 
         HorizontalDivider()
         Text("최근 수집된 원본 알림 (${rawEvents.size})", style = MaterialTheme.typography.titleMedium)

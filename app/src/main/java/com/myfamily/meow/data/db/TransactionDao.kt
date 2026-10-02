@@ -1,6 +1,7 @@
 package com.myfamily.meow.data.db
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
@@ -26,11 +27,19 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE status != 'PENDING' AND confirmedAt >= :since ORDER BY transactionTime ASC")
     fun observeReviewedSince(since: Long): Flow<List<ExpenseTransaction>>
 
+    /** Reviewed rows (included and excluded) in [start, end) — the calendar can re-edit them. */
     @Query(
-        "SELECT * FROM transactions WHERE status = 'INCLUDED' " +
+        "SELECT * FROM transactions WHERE status != 'PENDING' " +
             "AND transactionTime >= :start AND transactionTime < :end ORDER BY transactionTime ASC"
     )
-    fun observeIncludedBetween(start: Long, end: Long): Flow<List<ExpenseTransaction>>
+    fun observeReviewedBetween(start: Long, end: Long): Flow<List<ExpenseTransaction>>
+
+    /** Every row in [start, end) regardless of status — home screen's "오늘 들어온 소비". */
+    @Query("SELECT * FROM transactions WHERE transactionTime >= :start AND transactionTime < :end")
+    fun observeAllBetween(start: Long, end: Long): Flow<List<ExpenseTransaction>>
+
+    @Delete
+    suspend fun delete(transaction: ExpenseTransaction)
 
     @Query("SELECT * FROM transactions WHERE status = 'PENDING' ORDER BY transactionTime ASC")
     suspend fun getPending(): List<ExpenseTransaction>
@@ -51,7 +60,8 @@ interface TransactionDao {
     /** Pending rows nothing else could classify; transfers are skipped (category is moot). */
     @Query(
         "SELECT * FROM transactions WHERE status = 'PENDING' AND finalCategory IS NULL " +
-            "AND predictedCategory = 'ETC' AND aiTried = 0 AND transferLikely = 0 ORDER BY transactionTime ASC"
+            "AND predictedCategory = 'ETC' AND aiTried = 0 AND transferLikely = 0 AND direction = 'EXPENSE' " +
+            "ORDER BY transactionTime ASC"
     )
     suspend fun needingAi(): List<ExpenseTransaction>
 }

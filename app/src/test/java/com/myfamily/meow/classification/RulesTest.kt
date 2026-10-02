@@ -41,5 +41,6 @@ class RulesTest {
         assertTrue(TransferDetector.isTransferLike("토스", "홍길동님에게 15,000원을 보냈어요"))
         val tossTransfer = FakePaymentNotifier.SINGLES[4]
         assertTrue(TransferDetector.isTransferLike(tossTransfer.title, tossTransfer.text))
+
     }
 }

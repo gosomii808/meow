@@ -1,33 +1,37 @@
 package com.myfamily.meow.notification.parser
 
-data class ParsedPayment(val amount: Long, val merchant: String?)
+/** [isIncome]: money coming in (입금/환불/승인취소). Those notifications are dropped by the listener. */
+data class ParsedPayment(val amount: Long, val merchant: String?, val isIncome: Boolean = false)
 
 /**
  * Generic parser for Korean card/bank/pay notifications. App-specific parsers can be
  * added in front of this once real notification formats are collected (see the debug screen).
  */
 object NotificationParser {
-    private val PAYMENT_KEYWORDS = Regex("승인|결제|출금|충전|이체|송금|사용|보냈|입금")
+    private val PAYMENT_KEYWORDS = Regex("승인|결제|출금|충전|이체|송금|사용|보냈|입금|받았|환불|취소")
+    private val INCOME_KEYWORDS = Regex("""입금|받았|환불|들어왔|(?:승인|결제)\s*취소|취소\s*완료""")
     private val AMOUNT = Regex("""(\d{1,3}(?:,\d{3})+|\d+)\s*원""")
     private val NOT_SPENT_PREFIX = Regex("""(누적|잔액|잔고|한도|포인트)\s*:?\s*$""")
 
     /** Card SMS / 알림톡: "... 10/02 08:32 스타벅스 강남점 누적123,400원" */
     private val CARD_DATETIME_MERCHANT = Regex("""\d{1,2}/\d{1,2}\s+\d{1,2}:\d{2}\s+(.+?)(?:\s+(?:누적|잔액).*)?$""")
 
-    /** Toss transfers/charges: "내 토스뱅크 통장 → (주)카카오페이(카카오페이)" — recipient after the arrow. */
-    private val ARROW_RECIPIENT = Regex("""→\s*(.+)$""")
+    /** Toss: "내 토스뱅크 통장 → (주)카카오페이(카카오페이)" — sender → recipient. */
+    private val ARROW = Regex("""^(.+?)\s*→\s*(.+)$""")
 
     private val NOISE = Regex(
         """\[[^]]*]|\([^)]*\)|""" + AMOUNT.pattern +
-            """|결제\s*완료|결제|승인|출금|입금|충전|완료|일시불|체크|신용|Web발신|[|:·•]""" +
-            """|했어요|됐어요|되었습니다|하였습니다|보냈어요|받았어요|송금|이체|에서(?=\s|$)|님(?:에게|께)"""
+            """|결제\s*완료|결제|승인|취소|출금|입금|충전|완료|일시불|체크|신용|Web발신|[|:·•]""" +
+            """|했어요|됐어요|되었습니다|하였습니다|보냈어요|받았어요|송금|이체|에서(?=\s|$)""" +
+            """|님(?:에게서|으로부터|에게|께서|께|이)"""
     )
 
     fun looksLikePayment(title: String, text: String): Boolean = PAYMENT_KEYWORDS.containsMatchIn("$title $text")
 
     fun parse(title: String, text: String): ParsedPayment? {
         val amount = findAmount(text) ?: findAmount(title) ?: return null
-        return ParsedPayment(amount, findMerchant(title, text))
+        val isIncome = INCOME_KEYWORDS.containsMatchIn("$title $text")
+        return ParsedPayment(amount, findCounterparty(title, text, isIncome), isIncome)
     }
 
     private fun findAmount(source: String): Long? =
@@ -37,15 +41,15 @@ object NotificationParser {
             ?.replace(",", "")
             ?.toLongOrNull()
 
-    private fun findMerchant(title: String, text: String): String? {
-        text.lineSequence()
-            .firstNotNullOfOrNull { CARD_DATETIME_MERCHANT.find(it.trim())?.groupValues?.get(1)?.trim() }
+    private fun findCounterparty(title: String, text: String, isIncome: Boolean): String? {
+        val lines = text.lineSequence().map { it.trim() }
+
+        lines.firstNotNullOfOrNull { CARD_DATETIME_MERCHANT.find(it)?.groupValues?.get(1)?.trim() }
             ?.takeIf { it.isNotEmpty() }
             ?.let { return it }
 
-        text.lineSequence()
-            .firstNotNullOfOrNull { ARROW_RECIPIENT.find(it.trim())?.groupValues?.get(1) }
-            ?.let(::clean)
+        lines.firstNotNullOfOrNull { ARROW.find(it) }
+            ?.let { m -> clean(m.groupValues[if (isIncome) 1 else 2]) }
             ?.let { return it }
 
         return clean(text) ?: clean(title)

@@ -3,7 +3,7 @@ package com.myfamily.meow.classification
 enum class Category(val label: String) {
     FOOD("식비"),
     CAFE("카페"),
-    TRANSPORT("교통"),
+    TRANSPORT("교통비"),
     SHOPPING("쇼핑"),
     LIVING("생활"),
     CULTURE("문화/여가"),

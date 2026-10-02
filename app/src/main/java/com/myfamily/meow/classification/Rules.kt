@@ -61,7 +61,7 @@ object RuleClassifier {
 
 /** Charges, transfers and withdrawals are usually not purchases (spec §9). */
 object TransferDetector {
-    private val KEYWORDS = Regex("충전|송금|이체|계좌|입금|출금|정산|보냈|받았|환불")
+    private val KEYWORDS = Regex("충전|송금|이체|계좌|출금|정산|보냈")
 
     fun isTransferLike(vararg texts: String): Boolean = texts.any { KEYWORDS.containsMatchIn(it) }
 }

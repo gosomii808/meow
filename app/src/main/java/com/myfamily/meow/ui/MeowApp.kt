@@ -3,63 +3,40 @@ package com.myfamily.meow.ui
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.myfamily.meow.BuildConfig
 import com.myfamily.meow.notification.NotificationAccess
-import com.myfamily.meow.ui.calendar.CalendarScreen
-import com.myfamily.meow.ui.common.Wordmark
+import com.myfamily.meow.ui.common.BrandLockup
 import com.myfamily.meow.ui.debug.DebugScreen
+import com.myfamily.meow.ui.history.HistoryScreen
+import com.myfamily.meow.ui.home.HomeScreen
 import com.myfamily.meow.ui.onboarding.OnboardingScreen
+import com.myfamily.meow.ui.report.GoalScreen
+import com.myfamily.meow.ui.report.ReportScreen
 import com.myfamily.meow.ui.review.ReviewScreen
 import com.myfamily.meow.ui.settings.SettingsScreen
 import com.myfamily.meow.ui.theme.Background
-import com.myfamily.meow.ui.theme.CoralDark
-import com.myfamily.meow.ui.theme.Mint
-import com.myfamily.meow.ui.theme.Outline
-import com.myfamily.meow.ui.theme.TextPrimary
-import com.myfamily.meow.ui.theme.TextSecondary
+import com.myfamily.meow.ui.theme.dz
 
 private const val PREFS = "meow_prefs"
-private const val KEY_ONBOARDED = "onboarding_done"
+// v2: the Figma onboarding (tutorial + signup) replaced the first one, so show it again once.
+private const val KEY_ONBOARDED = "onboarding_done_v2"
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    REVIEW("검토", Icons.Default.CheckCircle),
-    HISTORY("내역", Icons.Default.DateRange),
-}
+private enum class Screen { HOME, SWIPE, HISTORY, REPORT, GOALS, SETTINGS, DEBUG }
 
 @Composable
 fun MeowApp() {
@@ -70,7 +47,7 @@ fun MeowApp() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(if (onboarded) Background else Color.White)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -88,91 +65,41 @@ fun MeowApp() {
 @Composable
 private fun MainScreen() {
     val context = LocalContext.current
-    var tab by rememberSaveable { mutableStateOf(Tab.REVIEW) }
-    var showDebug by rememberSaveable { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     var listenerOn by remember { mutableStateOf(true) }
     LifecycleResumeEffect(Unit) {
         listenerOn = NotificationAccess.isGranted(context)
         onPauseOrDispose { }
     }
-    BackHandler(enabled = showDebug || showSettings) {
-        showDebug = false
-        showSettings = false
+    BackHandler(enabled = screen != Screen.HOME) {
+        screen = if (screen == Screen.GOALS) Screen.REPORT else Screen.HOME
     }
+    val home = { screen = Screen.HOME }
 
-    Column(Modifier.fillMaxSize()) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-        ) {
-            IconButton(
-                onClick = {
-                    showSettings = !showSettings
-                    showDebug = false
-                },
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = "설정", tint = if (showSettings) Mint else TextSecondary)
-            }
-            Wordmark(Modifier.align(Alignment.Center))
-            if (BuildConfig.DEBUG) {
-                TextButton(
-                    onClick = {
-                        showDebug = !showDebug
-                        showSettings = false
-                    },
-                    modifier = Modifier.align(Alignment.CenterEnd),
-                ) {
-                    Text(if (showDebug) "닫기" else "DEV", color = TextSecondary, fontSize = 12.sp)
-                }
-            }
-        }
+    when (screen) {
+        Screen.HOME -> HomeScreen(
+            listenerOn = listenerOn,
+            onStartSwipe = { screen = Screen.SWIPE },
+            onHistory = { screen = Screen.HISTORY },
+            onReport = { screen = Screen.REPORT },
+            onSettings = { screen = Screen.SETTINGS },
+            onDebug = { screen = Screen.DEBUG },
+            onFixListener = { context.startActivity(NotificationAccess.fallbackIntent()) },
+        )
+        Screen.SWIPE -> ReviewScreen(onDone = home)
+        Screen.HISTORY -> HistoryScreen(onHome = home)
+        Screen.REPORT -> ReportScreen(onHome = home, onEditGoals = { screen = Screen.GOALS })
+        Screen.GOALS -> GoalScreen(onBack = { screen = Screen.REPORT })
+        Screen.SETTINGS -> WithHeader(home) { SettingsScreen() }
+        Screen.DEBUG -> WithHeader(home) { DebugScreen() }
+    }
+}
 
-        if (!listenerOn && !showDebug && !showSettings) {
-            Row(
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CoralDark)
-                    .clickable { context.startActivity(NotificationAccess.fallbackIntent()) }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text("알림 접근이 꺼져 있어 결제를 수집하지 못해요. 눌러서 켜기", color = TextPrimary, fontSize = 14.sp)
-            }
-        }
-
-        Box(Modifier.weight(1f)) {
-            when {
-                showDebug -> DebugScreen()
-                showSettings -> SettingsScreen()
-                tab == Tab.REVIEW -> ReviewScreen()
-                else -> CalendarScreen()
-            }
-        }
-
-        HorizontalDivider(color = Outline)
-        Row(Modifier.fillMaxWidth()) {
-            Tab.entries.forEach { t ->
-                val selected = t == tab && !showDebug && !showSettings
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clickable {
-                            tab = t
-                            showDebug = false
-                            showSettings = false
-                        }
-                        .padding(vertical = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(t.icon, contentDescription = null, tint = if (selected) Mint else TextSecondary)
-                    Spacer(Modifier.height(4.dp))
-                    Text(t.label, color = if (selected) Mint else TextSecondary, fontSize = 13.sp)
-                }
-            }
-        }
+/** Settings/DEV keep their own layouts under the brand header (tap it to go home). */
+@Composable
+private fun WithHeader(onHome: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Background)) {
+        BrandLockup(Modifier.padding(start = 27.dz, top = 13.dz), onClick = onHome)
+        content()
     }
 }

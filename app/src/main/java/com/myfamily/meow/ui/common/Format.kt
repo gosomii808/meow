@@ -1,5 +1,7 @@
 package com.myfamily.meow.ui.common
 
+import com.myfamily.meow.data.entity.Direction
+import com.myfamily.meow.data.entity.ExpenseTransaction
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -29,3 +31,8 @@ fun formatTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String
 fun LocalDate.startMillis(zone: ZoneId = ZoneId.systemDefault()): Long = atStartOfDay(zone).toInstant().toEpochMilli()
 
 fun Long.toLocalDate(zone: ZoneId = ZoneId.systemDefault()): LocalDate = Instant.ofEpochMilli(this).atZone(zone).toLocalDate()
+
+val ExpenseTransaction.isIncome: Boolean get() = direction == Direction.INCOME
+
+/** "5,500원" for spending, "+10,000원" for income. */
+fun ExpenseTransaction.signedWon(): String = (if (isIncome) "+" else "") + formatWon(amount)

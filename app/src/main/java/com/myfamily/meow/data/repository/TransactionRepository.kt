@@ -7,7 +7,9 @@ import com.myfamily.meow.classification.merchantKey
 import com.myfamily.meow.data.db.AppDatabase
 import com.myfamily.meow.data.entity.ClassificationSource
 import com.myfamily.meow.data.entity.CorrectionHistory
+import com.myfamily.meow.data.entity.Direction
 import com.myfamily.meow.data.entity.ExpenseTransaction
+import com.myfamily.meow.data.entity.NotificationLog
 import com.myfamily.meow.data.entity.ParseStatus
 import com.myfamily.meow.data.entity.RawPaymentEvent
 import com.myfamily.meow.data.entity.TransactionSource
@@ -19,12 +21,39 @@ class TransactionRepository(private val db: AppDatabase) {
     private val rawDao = db.rawEventDao()
     private val txDao = db.transactionDao()
     private val correctionDao = db.correctionDao()
+    private val logDao = db.notificationLogDao()
 
     val pending: Flow<List<ExpenseTransaction>> = txDao.observePending()
 
     fun reviewedSince(since: Long) = txDao.observeReviewedSince(since)
 
-    fun includedBetween(start: Long, end: Long) = txDao.observeIncludedBetween(start, end)
+    fun reviewedBetween(start: Long, end: Long) = txDao.observeReviewedBetween(start, end)
+
+    fun allBetween(start: Long, end: Long) = txDao.observeAllBetween(start, end)
+
+    /** Up swipe: split [transaction] among [people] and record only my share (rounded up). */
+    suspend fun settle(transaction: ExpenseTransaction, people: Int) {
+        val share = (transaction.amount + people - 1) / people
+        txDao.update(
+            transaction.copy(
+                amount = share,
+                originalAmount = transaction.amount,
+                splitCount = people,
+                status = TransactionStatus.INCLUDED,
+                confirmedAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Undo any review decision by restoring the pre-swipe snapshot. */
+    suspend fun restore(snapshot: ExpenseTransaction) =
+        txDao.update(snapshot.copy(status = TransactionStatus.PENDING, confirmedAt = null))
+
+    fun recentLogs(limit: Int = 50) = logDao.observeRecent(limit)
+
+    suspend fun log(entry: NotificationLog) = logDao.insert(entry)
+
+    suspend fun clearLogs() = logDao.clear()
 
     fun recentRawEvents(limit: Int = 30) = rawDao.observeRecent(limit)
 
@@ -98,7 +127,7 @@ class TransactionRepository(private val db: AppDatabase) {
     /** Saves a user edit; a changed category is remembered and applied to similar pending rows. */
     suspend fun saveEdit(original: ExpenseTransaction, edited: ExpenseTransaction) {
         txDao.update(edited)
-        if (edited.category != original.category) {
+        if (edited.direction == Direction.EXPENSE && edited.category != original.category) {
             remember(edited.merchant, predicted = original.predictedCategory, corrected = edited.category)
         }
     }
@@ -112,9 +141,18 @@ class TransactionRepository(private val db: AppDatabase) {
                 confirmedAt = System.currentTimeMillis(),
             )
         )
-        if (transaction.finalCategory != null && transaction.merchant != "직접 입력") {
+        if (transaction.direction == Direction.EXPENSE && transaction.finalCategory != null && transaction.merchant != "직접 입력") {
             remember(transaction.merchant, predicted = Category.ETC, corrected = transaction.finalCategory)
         }
+    }
+
+    /** Re-decide an already reviewed row; keeps confirmedAt so it doesn't reappear in today's summary. */
+    suspend fun changeReviewedStatus(transaction: ExpenseTransaction, status: TransactionStatus) =
+        txDao.update(transaction.copy(status = status))
+
+    /** Only manual rows can be deleted; notification rows are kept and excluded instead. */
+    suspend fun deleteManual(transaction: ExpenseTransaction) {
+        if (transaction.source == TransactionSource.MANUAL) txDao.delete(transaction)
     }
 
     private suspend fun remember(merchant: String, predicted: Category, corrected: Category) {
