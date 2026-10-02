@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,10 +26,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.aiCategorizer
+import com.myfamily.meow.analysis.AccuracyStats
+import com.myfamily.meow.data.entity.ClassificationSource
 import com.myfamily.meow.notification.ForegroundApp
 import com.myfamily.meow.notification.NotificationAccess
 import com.myfamily.meow.reminder.DailyReviewScheduler
 import com.myfamily.meow.reminder.ReminderSettings
+import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.ReviewTimeDialog
 import com.myfamily.meow.ui.common.canPostNotifications
 import com.myfamily.meow.ui.common.formatReviewTime
@@ -109,6 +113,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         ) {
             Text(if (context.aiCategorizer.isAvailable) "모델 있음" else "모델 없음", color = TextSecondary)
         }
+
+        val stats by produceState<AccuracyStats.Report?>(initialValue = null) {
+            value = runCatching { context.repository.accuracyStats() }.getOrNull()
+        }
+        stats?.let { AccuracyCard(it) }
     }
 
     if (pickingTime) {
@@ -122,6 +131,47 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 apply()
             },
         )
+    }
+}
+
+private fun sourceLabel(source: ClassificationSource) = when (source) {
+    ClassificationSource.RULE -> "규칙"
+    ClassificationSource.APP -> "직전 앱"
+    ClassificationSource.LOCATION -> "위치"
+    ClassificationSource.AI -> "AI"
+    ClassificationSource.USER -> "내 기록"
+}
+
+@Composable
+private fun AccuracyCard(report: AccuracyStats.Report) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Surface)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("분류 정확도 통계", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        if (!report.hasData) {
+            Text("검토한 소비가 쌓이면 보여줄게요", color = TextSecondary, fontSize = 13.sp)
+            return@Column
+        }
+        Text(
+            "검토 ${report.reviewed}건 중 ${report.corrected}건 수정 · 자동 분류 정확도 ${report.accuracyPercent}%",
+            color = TextSecondary,
+            fontSize = 13.sp,
+        )
+        report.bySource.forEach { s ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(sourceLabel(s.source), color = TextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(
+                    "${s.accuracyPercent}% (수정 ${s.corrected}/${s.reviewed})",
+                    color = if (s.correctionPercent >= 50) TextSecondary else Mint,
+                    fontSize = 13.sp,
+                )
+            }
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package com.myfamily.meow.data.repository
 
+import com.myfamily.meow.analysis.AccuracyStats
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.classification.RuleClassifier
 import com.myfamily.meow.classification.TransferDetector
@@ -59,11 +60,25 @@ class TransactionRepository(private val db: AppDatabase) {
 
     suspend fun countPending() = txDao.countPending()
 
+    /** Classification accuracy = user-correction rate over reviewed rows (spec B). */
+    suspend fun accuracyStats(): AccuracyStats.Report = AccuracyStats.compute(txDao.allReviewed())
+
     suspend fun needingAi() = txDao.needingAi()
 
     /** Latest correction per merchant, as (merchant, category) few-shot examples. */
     suspend fun correctionExamples(limit: Int = 10): List<Pair<String, Category>> =
         correctionDao.recent(limit).map { it.merchant to it.correctedCategory }
+
+    /**
+     * One-time backfill (spec A): recompute [merchantKey] for existing correction rows with the
+     * new [MerchantNormalizer]. Idempotent — only rows whose key changed are updated.
+     */
+    suspend fun backfillCorrectionKeys() {
+        correctionDao.all().forEach { row ->
+            val key = merchantKey(row.merchant)
+            if (key != row.merchantKey) correctionDao.updateKey(row.id, key)
+        }
+    }
 
     /**
      * Stores the raw notification and, if it parsed, a PENDING candidate with category,

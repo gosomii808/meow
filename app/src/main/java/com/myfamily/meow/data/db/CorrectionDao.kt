@@ -19,4 +19,10 @@ interface CorrectionDao {
             "(SELECT MAX(id) FROM correction_history GROUP BY merchantKey) ORDER BY createdAt DESC LIMIT :limit"
     )
     suspend fun recent(limit: Int): List<CorrectionHistory>
+
+    @Query("SELECT * FROM correction_history")
+    suspend fun all(): List<CorrectionHistory>
+
+    @Query("UPDATE correction_history SET merchantKey = :key WHERE id = :id")
+    suspend fun updateKey(id: Long, key: String)
 }

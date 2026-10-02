@@ -2,6 +2,8 @@ package com.myfamily.meow.ui.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.data.entity.TransactionStatus
 import com.myfamily.meow.data.repository.TransactionRepository
@@ -42,6 +44,18 @@ class ReportViewModel(repository: TransactionRepository) : ViewModel() {
             shown.map { ym -> monthSpending(spent, ym, weekday) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), shown.map { MonthSpending(it) })
+
+    /** Recurring/subscription payments over a wider window (spec C); display only. */
+    val recurring: StateFlow<List<RecurringDetector.RecurringPayment>> = repository
+        .reviewedBetween(current.minusMonths(RECURRING_MONTHS).atDay(1).startMillis(), current.plusMonths(1).atDay(1).startMillis())
+        .map { RecurringDetector.detect(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Unusual-spike categories this week versus their own history (spec D); display only. */
+    val anomalies: StateFlow<List<AnomalyDetector.Anomaly>> = repository
+        .reviewedBetween(current.minusMonths(RECURRING_MONTHS).atDay(1).startMillis(), current.plusMonths(1).atDay(1).startMillis())
+        .map { AnomalyDetector.detect(it, java.time.LocalDate.now()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Average spend per weekday from history, normalized so the mean is 1 (uniform if empty). */
     private fun weekdayWeights(spent: List<com.myfamily.meow.data.entity.ExpenseTransaction>): Map<DayOfWeek, Float> {
@@ -94,5 +108,6 @@ class ReportViewModel(repository: TransactionRepository) : ViewModel() {
 
     private companion object {
         const val MONTHS_BACK = 2 // current + 2 previous = 3 months
+        const val RECURRING_MONTHS = 6L // wider window so monthly subscriptions reach 3+ payments
     }
 }

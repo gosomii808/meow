@@ -1,11 +1,10 @@
 package com.myfamily.meow.classification
 
 /**
- * Brand part of a merchant name so branches share history:
- * "스타벅스 강남점" → "스타벅스", "GS25 역삼점" → "gs25".
+ * Normalized merchant used as the key that lets branches share correction history:
+ * "스타벅스 강남점" → "스타벅스", "GS25 역삼점" → "gs25". See [MerchantNormalizer].
  */
-fun merchantKey(merchant: String): String =
-    merchant.trim().split(Regex("""\s+""")).first().lowercase()
+fun merchantKey(merchant: String): String = com.myfamily.meow.analysis.MerchantNormalizer.normalize(merchant)
 
 /** Step ③ of the classification chain: well-known merchants and keywords (spec §10). */
 object RuleClassifier {
@@ -51,10 +50,10 @@ object RuleClassifier {
 
     fun classify(merchant: String): Category? {
         val m = merchant.lowercase()
-        val key = merchantKey(merchant)
-        // Whole-token match for short brand names like "cu"/"kt" so "cucumber" doesn't hit.
-        return RULES.firstOrNull { (_, words) ->
-            words.any { w -> if (w.length <= 3) key == w else w in m }
+        // Whole-word match for short brand names like "cu"/"kt" so "cucumber" doesn't hit.
+        val words = m.split(Regex("""\s+"""))
+        return RULES.firstOrNull { (_, keywords) ->
+            keywords.any { w -> if (w.length <= 3) words.any { it == w } else w in m }
         }?.first
     }
 }

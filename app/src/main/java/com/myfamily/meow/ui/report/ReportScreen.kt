@@ -58,6 +58,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myfamily.meow.analysis.AnomalyDetector
+import com.myfamily.meow.analysis.RecurringDetector
 import com.myfamily.meow.classification.Category
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.BrandLockup
@@ -98,6 +100,8 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
     val context = LocalContext.current
     val vm = reportViewModel()
     val months by vm.months.collectAsStateWithLifecycle()
+    val recurring by vm.recurring.collectAsStateWithLifecycle()
+    val anomalies by vm.anomalies.collectAsStateWithLifecycle()
     val goals = remember { GoalSettings(context) }
     var monthlyGoal by remember { mutableStateOf(goals.monthly) }
     var categoryGoals by remember { mutableStateOf(goals.categoryGoals()) }
@@ -138,6 +142,14 @@ fun ReportScreen(onHome: () -> Unit, onEditGoals: () -> Unit, onChat: () -> Unit
                 Spacer(Modifier.height(26.dz))
                 SpeedCard(spending, monthlyGoal)
             }
+        }
+        if (anomalies.isNotEmpty()) {
+            Spacer(Modifier.height(26.dz))
+            AnomalyCard(anomalies)
+        }
+        if (recurring.isNotEmpty()) {
+            Spacer(Modifier.height(26.dz))
+            RecurringCard(recurring)
         }
         Spacer(Modifier.height(20.dz))
         DesignButton("고양이에게 이 리포트 물어보기 🐾", onChat, container = PinkSoft, heightPx = 64, fontPx = 19)
@@ -185,6 +197,67 @@ private fun MonthSwitcher(months: List<MonthSpending>, pager: PagerState) {
                 contentDescription = "다음 달",
                 tint = if (page < months.size - 1) TextPrimary else DotInactive,
             )
+        }
+    }
+}
+
+/** "이번 주 이상 소비" — categories spiking versus their own history (spec D). Display only. */
+@Composable
+private fun AnomalyCard(items: List<AnomalyDetector.Anomaly>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dz))
+            .background(SpeedBg)
+            .border(1.dz, SpeedBorder, RoundedCornerShape(12.dz))
+            .padding(horizontal = 20.dz, vertical = 18.dz),
+        verticalArrangement = Arrangement.spacedBy(10.dz),
+    ) {
+        Text("이번 주 평소보다 많이 썼어요", color = TextPrimary, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+        items.forEach { a ->
+            val multiple = String.format(java.util.Locale.KOREA, "%.1f", a.ratio)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${a.category.emoji} ${a.category.label}이 평소의 ${multiple}배",
+                    color = TextPrimary,
+                    fontSize = 17.sz,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(formatWon(a.current), color = Pink, fontSize = 16.sz, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** "매달 자동으로 나가는 돈" — recurring payments (spec C). Display only, never auto-categorized. */
+@Composable
+private fun RecurringCard(items: List<RecurringDetector.RecurringPayment>) {
+    val monthlyTotal = items.sumOf { it.monthlyAmount }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dz))
+            .background(GoalCardBg)
+            .border(1.dz, GoalCardBorder, RoundedCornerShape(12.dz))
+            .padding(horizontal = 20.dz, vertical = 18.dz),
+        verticalArrangement = Arrangement.spacedBy(12.dz),
+    ) {
+        Text("매달 자동으로 나가는 돈", color = TextPrimary, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+        Text("${items.size}건 · 월 ${formatWon(monthlyTotal)}", color = TextSecondary, fontSize = 16.sz)
+        items.forEach { p ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(p.merchant, color = TextPrimary, fontSize = 17.sz, fontWeight = FontWeight.Medium)
+                    val cycle = if (p.cycle == RecurringDetector.Cycle.WEEKLY) "매주" else "매달"
+                    Text(
+                        "$cycle · 다음 ${p.nextDate.monthValue}/${p.nextDate.dayOfMonth}",
+                        color = TextMuted,
+                        fontSize = 14.sz,
+                    )
+                }
+                Text("월 ${formatWon(p.monthlyAmount)}", color = TextPrimary, fontSize = 16.sz, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

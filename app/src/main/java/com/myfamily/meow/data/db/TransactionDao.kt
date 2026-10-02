@@ -57,6 +57,10 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE status = 'PENDING'")
     suspend fun countPending(): Int
 
+    /** All reviewed rows (included and excluded) — classification accuracy stats (spec B). */
+    @Query("SELECT * FROM transactions WHERE status != 'PENDING'")
+    suspend fun allReviewed(): List<ExpenseTransaction>
+
     /** Other notification candidates with the same amount in [from, to] — duplicate detection. */
     @Query(
         "SELECT * FROM transactions WHERE source = 'NOTIFICATION' AND amount = :amount " +
