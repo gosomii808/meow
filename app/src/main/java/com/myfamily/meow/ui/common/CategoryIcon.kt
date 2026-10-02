@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -44,12 +45,12 @@ private fun DrawScope.drawGlyph(category: Category, c: Color) {
             line(9f, 3f, 9f, 6f); line(13f, 3f, 13f, 6f)
         }
         Category.TRANSPORT -> { // bus
-            drawRoundRect(c, Offset(4f, 5f), Size(16f, 13f), androidx.compose.ui.geometry.CornerRadius(3f), style = s)
+            drawRoundRect(c, Offset(4f, 5f), Size(16f, 13f), CornerRadius(3f), style = s)
             line(4f, 10f, 20f, 10f)
             dot(8f, 20f, 1.6f); dot(16f, 20f, 1.6f)
         }
         Category.SHOPPING -> { // shopping bag
-            drawRoundRect(c, Offset(6f, 8f), Size(12f, 12f), androidx.compose.ui.geometry.CornerRadius(1.5f), style = s)
+            drawRoundRect(c, Offset(6f, 8f), Size(12f, 12f), CornerRadius(1.5f), style = s)
             drawArc(c, 180f, 180f, false, Offset(9f, 4f), Size(6f, 8f), style = s)
         }
         Category.LIVING -> { // house
@@ -57,17 +58,13 @@ private fun DrawScope.drawGlyph(category: Category, c: Color) {
             path { moveTo(6f, 11f); lineTo(6f, 20f); lineTo(18f, 20f); lineTo(18f, 11f) }
             path { moveTo(10f, 20f); lineTo(10f, 15f); lineTo(14f, 15f); lineTo(14f, 20f) }
         }
-        Category.CULTURE -> { // star (filled)
-            drawPath(star(12f, 12f, 9f, 4f), c)
-        }
+        Category.CULTURE -> drawPath(star(12f, 12f, 9f, 4f), c) // star
         Category.EDUCATION -> { // book
             path { moveTo(6f, 4f); lineTo(18f, 4f); lineTo(18f, 20f); lineTo(6f, 20f); close() }
             line(9f, 4f, 9f, 20f)
             line(12f, 9f, 16f, 9f); line(12f, 13f, 16f, 13f)
         }
-        Category.MEDICAL -> { // plus
-            line(12f, 6f, 12f, 18f); line(6f, 12f, 18f, 12f)
-        }
+        Category.MEDICAL -> { line(12f, 6f, 12f, 18f); line(6f, 12f, 18f, 12f) } // plus
         Category.TRAVEL -> { // paper plane
             path { moveTo(3f, 12f); lineTo(21f, 4f); lineTo(13f, 21f); lineTo(11f, 13f); close() }
             line(11f, 13f, 21f, 4f)
@@ -91,4 +88,3 @@ private fun star(cx: Float, cy: Float, outer: Float, inner: Float): Path = Path(
     }
     close()
 }
-

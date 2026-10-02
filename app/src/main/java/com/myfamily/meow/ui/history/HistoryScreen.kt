@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,8 +23,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import com.myfamily.meow.ui.theme.Outline
 import com.myfamily.meow.ui.theme.color
-import com.myfamily.meow.ui.theme.pastel
-import com.myfamily.meow.ui.theme.deep
 import com.myfamily.meow.classification.Category
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -43,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -146,7 +142,12 @@ fun HistoryScreen(onHome: () -> Unit) {
                 DayDetail(date, byDay[date].orEmpty(), onEdit = { editing = it }, onAdd = { adding = true }, onClose = { vm.select(null) })
             }
         } else if (viewMode == ViewMode.FOLDER) {
-            CategoryFolders(categoryStats, onOpen = {
+            // Every category, spent ones first (matches the Figma 카테고리 screen).
+            val byCategory = categoryStats.associate { it.first to (it.second to it.third) }
+            val allStats = Category.entries
+                .map { c -> Triple(c, byCategory[c]?.first ?: 0L, byCategory[c]?.second ?: 0) }
+                .sortedByDescending { it.second }
+            CategoryFolders(allStats, onOpen = {
                 categoryFilter = it
                 viewMode = ViewMode.LIST
             })
@@ -362,7 +363,7 @@ private fun ViewModeToggle(mode: ViewMode, onChange: (ViewMode) -> Unit) {
             .background(PinkSoft)
             .padding(4.dz),
     ) {
-        listOf(ViewMode.LIST to "목록", ViewMode.FOLDER to "폴더", ViewMode.CALENDAR to "캘린더").forEach { (value, label) ->
+        listOf(ViewMode.LIST to "목록", ViewMode.FOLDER to "카테고리", ViewMode.CALENDAR to "캘린더").forEach { (value, label) ->
             Text(
                 label,
                 color = if (mode == value) TextPrimary else TextMuted,
@@ -405,26 +406,29 @@ private fun CategoryFolders(stats: List<Triple<Category, Long, Int>>, onOpen: (C
     }
 }
 
+/** Figma 카테고리 card: white card, a colored pill (emoji + name) on top, amount + count below. */
 @Composable
 private fun FolderCard(category: Category, amount: Long, count: Int, modifier: Modifier, onClick: () -> Unit) {
-    val ink = category.deep
     Column(
         modifier
-            .heightIn(min = 150.dz)
-            .shadow(3.dz, RoundedCornerShape(22.dz))
-            .clip(RoundedCornerShape(22.dz))
-            .background(category.pastel)
+            .designCard(RoundedCornerShape(20.dz), 3.dz)
             .clickable(onClick = onClick)
-            .padding(horizontal = 22.dz, vertical = 20.dz),
+            .padding(horizontal = 18.dz, vertical = 18.dz),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CategoryIcon(category, ink, 34.dz)
-            Spacer(Modifier.width(12.dz))
-            Text(category.label, color = ink, fontSize = 22.sz, fontWeight = FontWeight.Bold)
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(20.dz))
+                .background(category.color)
+                .padding(horizontal = 12.dz, vertical = 4.dz),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CategoryIcon(category, Color.White, 20.dz)
+            Spacer(Modifier.width(6.dz))
+            Text(category.label, color = Color.White, fontSize = 15.sz, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.weight(1f))
-        Text(formatWon(amount), color = ink, fontSize = 27.sz, fontWeight = FontWeight.Bold)
-        Text("${count}건", color = ink.copy(alpha = 0.7f), fontSize = 15.sz)
+        Spacer(Modifier.height(14.dz))
+        Text(formatWon(amount), color = TextPrimary, fontSize = 24.sz, fontWeight = FontWeight.Bold)
+        Text("${count}건", color = TextSecondary, fontSize = 14.sz)
     }
 }
 

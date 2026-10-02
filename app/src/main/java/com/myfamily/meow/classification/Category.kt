@@ -1,17 +1,17 @@
 package com.myfamily.meow.classification
 
-enum class Category(val label: String) {
-    FOOD("식비"),
-    CAFE("카페"),
-    TRANSPORT("교통비"),
-    SHOPPING("쇼핑"),
-    LIVING("생활"),
-    CULTURE("문화/여가"),
-    EDUCATION("교육"),
-    MEDICAL("의료"),
-    TRAVEL("여행"),
-    SUBSCRIPTION("구독"),
-    ETC("기타");
+enum class Category(val label: String, val emoji: String) {
+    FOOD("식비", "🍚"),
+    CAFE("카페", "☕"),
+    TRANSPORT("교통비", "🚌"),
+    SHOPPING("쇼핑", "🛍️"),
+    LIVING("생활", "🏠"),
+    CULTURE("문화/여가", "🎬"),
+    EDUCATION("교육", "📚"),
+    MEDICAL("의료", "💊"),
+    TRAVEL("여행", "✈️"),
+    SUBSCRIPTION("구독", "⭐"),
+    ETC("기타", "📦");
 
     companion object {
         /**

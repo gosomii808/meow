@@ -50,50 +50,20 @@ val OnMint = Color.White
 val Coral = SwipeExclude
 val CoralDark = Color(0xFFFFE3E4)
 
-/** History chip / report bar color (vivid). */
+/** Category chip / folder pill color, matched to the team's Figma 카테고리 design. */
 val Category.color: Color
     get() = when (this) {
-        Category.FOOD -> Color(0xFFE09A4E)
-        Category.SHOPPING -> Color(0xFFE07A99)
-        Category.TRANSPORT -> Color(0xFF5BC47E)
-        Category.CAFE -> Color(0xFFB08968)
-        Category.LIVING -> Color(0xFF6E9BE0)
-        Category.CULTURE -> Color(0xFF9E7BE0)
-        Category.EDUCATION -> Color(0xFF3FB3AA)
-        Category.MEDICAL -> Color(0xFFE88A64)
-        Category.TRAVEL -> Color(0xFF55A0E8)
-        Category.SUBSCRIPTION -> Color(0xFFCB76B3)
-        Category.ETC -> Color(0xFFABA49E)
+        Category.SHOPPING -> Color(0xFFCC9340)
+        Category.FOOD -> Color(0xFFC75B74)
+        Category.TRANSPORT -> Color(0xFF53A860)
+        Category.ETC -> Color(0xFF8E8E8E)
+        Category.CAFE -> Color(0xFF8C6E52)
+        Category.CULTURE -> Color(0xFF8257C9)
+        Category.SUBSCRIPTION -> Color(0xFF4D7FD0)
+        Category.MEDICAL -> Color(0xFFCC5A3F)
+        Category.LIVING -> Color(0xFF5FA9C4)
+        Category.EDUCATION -> Color(0xFF3FA99E)
+        Category.TRAVEL -> Color(0xFF5596D9)
     }
 
-/** Pastel background for category folders. */
-val Category.pastel: Color
-    get() = when (this) {
-        Category.FOOD -> Color(0xFFFCE6C9)
-        Category.SHOPPING -> Color(0xFFFBD9E1)
-        Category.TRANSPORT -> Color(0xFFD1EDD9)
-        Category.CAFE -> Color(0xFFEADBCB)
-        Category.LIVING -> Color(0xFFD9E6F8)
-        Category.CULTURE -> Color(0xFFE6DAF7)
-        Category.EDUCATION -> Color(0xFFCFEAE6)
-        Category.MEDICAL -> Color(0xFFFADFD2)
-        Category.TRAVEL -> Color(0xFFD6E8FB)
-        Category.SUBSCRIPTION -> Color(0xFFF4DBEC)
-        Category.ETC -> Color(0xFFEAE4DF)
-    }
 
-/** Saturated tone for the icon/text on a [pastel] background. */
-val Category.deep: Color
-    get() = when (this) {
-        Category.FOOD -> Color(0xFFC07E2C)
-        Category.SHOPPING -> Color(0xFFC85C75)
-        Category.TRANSPORT -> Color(0xFF34925A)
-        Category.CAFE -> Color(0xFF946B45)
-        Category.LIVING -> Color(0xFF4877BE)
-        Category.CULTURE -> Color(0xFF7355BC)
-        Category.EDUCATION -> Color(0xFF2C8880)
-        Category.MEDICAL -> Color(0xFFCC6642)
-        Category.TRAVEL -> Color(0xFF3579C0)
-        Category.SUBSCRIPTION -> Color(0xFFAE5593)
-        Category.ETC -> Color(0xFF857A72)
-    }
