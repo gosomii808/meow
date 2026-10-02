@@ -33,6 +33,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.notification.NotificationAccess
+import com.myfamily.meow.reminder.DailyReviewScheduler
+import com.myfamily.meow.reminder.ReminderSettings
+import com.myfamily.meow.ui.common.ReviewTimeDialog
+import com.myfamily.meow.ui.common.formatReviewTime
+import com.myfamily.meow.ui.common.rememberNotificationPermissionRequest
 import com.myfamily.meow.ui.common.Wordmark
 import com.myfamily.meow.ui.theme.Mint
 import com.myfamily.meow.ui.theme.OnMint
@@ -53,7 +58,9 @@ private val PAGES = listOf(
 fun OnboardingScreen(onDone: () -> Unit) {
     var page by remember { mutableIntStateOf(0) }
 
-    if (page < PAGES.size) {
+    if (page > PAGES.size) {
+        ReminderPage(onDone = onDone)
+    } else if (page < PAGES.size) {
         val p = PAGES[page]
         OnboardingLayout(
             indicator = { PageIndicator(count = PAGES.size, current = page) },
@@ -64,7 +71,50 @@ fun OnboardingScreen(onDone: () -> Unit) {
             onButton = { page++ },
         )
     } else {
-        PermissionPage(onDone = onDone)
+        PermissionPage(onDone = { page++ })
+    }
+}
+
+/** Spec §13 onboarding: pick the daily review time and allow the reminder notification. */
+@Composable
+private fun ReminderPage(onDone: () -> Unit) {
+    val context = LocalContext.current
+    val settings = remember { ReminderSettings(context) }
+    var time by remember { mutableStateOf(settings.time) }
+    var picking by remember { mutableStateOf(false) }
+
+    fun finish(enabled: Boolean) {
+        settings.time = time
+        settings.enabled = enabled
+        DailyReviewScheduler.schedule(context)
+        onDone()
+    }
+    val requestPermission = rememberNotificationPermissionRequest { granted -> finish(granted) }
+
+    OnboardingLayout(
+        indicator = {},
+        emoji = "⏰",
+        title = "검토 시간을 정해요",
+        body = "매일 이 시간에 남은 소비가 있으면\n알려드릴게요",
+        extra = {
+            TextButton(onClick = { picking = true }) {
+                Text(formatReviewTime(time), color = Mint, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        button = "알림 받고 시작하기",
+        onButton = { requestPermission(context) },
+        secondary = "알림 없이 시작" to { finish(false) },
+    )
+
+    if (picking) {
+        ReviewTimeDialog(
+            initial = time,
+            onDismiss = { picking = false },
+            onConfirm = {
+                time = it
+                picking = false
+            },
+        )
     }
 }
 
@@ -111,6 +161,7 @@ private fun OnboardingLayout(
     button: String,
     onButton: () -> Unit,
     secondary: Pair<String, () -> Unit>? = null,
+    extra: @Composable () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -128,6 +179,8 @@ private fun OnboardingLayout(
         Text(title, color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(20.dp))
         Text(body, color = TextSecondary, fontSize = 17.sp, textAlign = TextAlign.Center, lineHeight = 26.sp)
+        Spacer(Modifier.height(16.dp))
+        extra()
         Spacer(Modifier.weight(1.4f))
         Button(
             onClick = onButton,

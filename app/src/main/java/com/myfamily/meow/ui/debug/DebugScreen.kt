@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.myfamily.meow.debug.FakePaymentNotifier
 import com.myfamily.meow.notification.NotificationAccess
+import com.myfamily.meow.reminder.DailyReviewScheduler
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.formatTime
 import com.myfamily.meow.ui.theme.Surface
@@ -92,6 +93,7 @@ fun DebugScreen(modifier: Modifier = Modifier) {
             OutlinedButton(onClick = { post(listOf(fake)) }) { Text("${fake.sourceLabel}: ${fake.text.lines().last().take(24)}…") }
         }
 
+        OutlinedButton(onClick = { DailyReviewScheduler.runNow(context) }) { Text("검토 알림 지금 보내기 (남은 건 있을 때)") }
         OutlinedButton(onClick = { showAi = true }) { Text("Gemma 분류 테스트 열기") }
 
         HorizontalDivider()

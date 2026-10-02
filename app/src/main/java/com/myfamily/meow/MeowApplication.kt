@@ -2,13 +2,24 @@ package com.myfamily.meow
 
 import android.app.Application
 import android.content.Context
+import com.myfamily.meow.ai.AiCategorizer
 import com.myfamily.meow.data.db.AppDatabase
 import com.myfamily.meow.data.repository.TransactionRepository
+import com.myfamily.meow.reminder.DailyReviewScheduler
 
 class MeowApplication : Application() {
     val database by lazy { AppDatabase.create(this) }
     val repository by lazy { TransactionRepository(database) }
+    val aiCategorizer by lazy { AiCategorizer(this, repository) }
+
+    override fun onCreate() {
+        super.onCreate()
+        DailyReviewScheduler.schedule(this)
+    }
 }
 
-val Context.repository: TransactionRepository
-    get() = (applicationContext as MeowApplication).repository
+private val Context.app get() = applicationContext as MeowApplication
+
+val Context.repository: TransactionRepository get() = app.repository
+
+val Context.aiCategorizer: AiCategorizer get() = app.aiCategorizer

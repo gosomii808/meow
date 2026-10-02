@@ -49,6 +49,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.data.entity.TransactionStatus
+import com.myfamily.meow.aiCategorizer
 import com.myfamily.meow.repository
 import com.myfamily.meow.ui.common.TransactionEditDialog
 import com.myfamily.meow.ui.common.formatWon
@@ -68,12 +69,13 @@ import java.time.LocalDate
 fun ReviewScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val vm: ReviewViewModel = viewModel(factory = viewModelFactory {
-        initializer { ReviewViewModel(context.repository) }
+        initializer { ReviewViewModel(context.repository, context.aiCategorizer) }
     })
     val pending by vm.pending.collectAsStateWithLifecycle()
     val reviewedToday by vm.reviewedToday.collectAsStateWithLifecycle()
     val summaryDismissed by vm.summaryDismissed.collectAsStateWithLifecycle()
     val lastSwiped by vm.lastSwiped.collectAsStateWithLifecycle()
+    val aiRunningIds by vm.aiRunningIds.collectAsStateWithLifecycle()
 
     var editing by remember { mutableStateOf<ExpenseTransaction?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -84,6 +86,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
             list == null -> Unit
             list.isNotEmpty() -> CardStack(
                 pending = list,
+                aiRunningIds = aiRunningIds,
                 onSwiped = vm::swipe,
                 onClick = { editing = it },
             )
@@ -117,7 +120,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
             date = LocalDate.now(),
             onDismiss = { editing = null },
             onSave = {
-                vm.update(it)
+                vm.saveEdit(tx, it)
                 editing = null
             },
         )
@@ -138,6 +141,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun CardStack(
     pending: List<ExpenseTransaction>,
+    aiRunningIds: Set<Long>,
     onSwiped: (ExpenseTransaction, Boolean) -> Unit,
     onClick: (ExpenseTransaction) -> Unit,
 ) {
@@ -172,6 +176,7 @@ private fun CardStack(
             val top = pending.first()
             SwipeCard(
                 transaction = top,
+                aiRunning = top.id in aiRunningIds,
                 onSwiped = { include -> onSwiped(top, include) },
                 onClick = { onClick(top) },
             )

@@ -1,16 +1,24 @@
 package com.myfamily.meow.data.repository
 
+import com.myfamily.meow.classification.Category
+import com.myfamily.meow.classification.RuleClassifier
+import com.myfamily.meow.classification.TransferDetector
+import com.myfamily.meow.classification.merchantKey
 import com.myfamily.meow.data.db.AppDatabase
+import com.myfamily.meow.data.entity.ClassificationSource
+import com.myfamily.meow.data.entity.CorrectionHistory
 import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.data.entity.ParseStatus
 import com.myfamily.meow.data.entity.RawPaymentEvent
 import com.myfamily.meow.data.entity.TransactionSource
 import com.myfamily.meow.data.entity.TransactionStatus
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 
 class TransactionRepository(private val db: AppDatabase) {
     private val rawDao = db.rawEventDao()
     private val txDao = db.transactionDao()
+    private val correctionDao = db.correctionDao()
 
     val pending: Flow<List<ExpenseTransaction>> = txDao.observePending()
 
@@ -20,26 +28,56 @@ class TransactionRepository(private val db: AppDatabase) {
 
     fun recentRawEvents(limit: Int = 30) = rawDao.observeRecent(limit)
 
+    suspend fun countPending() = txDao.countPending()
+
+    suspend fun needingAi() = txDao.needingAi()
+
+    /** Latest correction per merchant, as (merchant, category) few-shot examples. */
+    suspend fun correctionExamples(limit: Int = 10): List<Pair<String, Category>> =
+        correctionDao.recent(limit).map { it.merchant to it.correctedCategory }
+
     /**
-     * Stores the raw notification and, if it parsed, a PENDING candidate.
-     * Returns false if the same notification was already recorded.
+     * Stores the raw notification and, if it parsed, a PENDING candidate with category,
+     * transfer and duplicate hints. Returns false if the notification was already recorded.
      */
     suspend fun recordNotification(event: RawPaymentEvent, sourceLabel: String): Boolean {
         val rawId = rawDao.insert(event)
         if (rawId == -1L) return false
-        if (event.parseStatus == ParseStatus.SUCCESS && event.amount != null) {
-            txDao.insert(
-                ExpenseTransaction(
-                    rawEventId = rawId,
-                    amount = event.amount,
-                    merchant = event.merchant ?: sourceLabel,
-                    transactionTime = event.detectedAt,
-                    sourceLabel = sourceLabel,
-                    source = TransactionSource.NOTIFICATION,
-                )
+        if (event.parseStatus != ParseStatus.SUCCESS || event.amount == null) return true
+
+        val merchant = event.merchant ?: sourceLabel
+        val (category, classifiedBy) = classifyWithoutAi(merchant)
+        val id = txDao.insert(
+            ExpenseTransaction(
+                rawEventId = rawId,
+                amount = event.amount,
+                merchant = merchant,
+                transactionTime = event.detectedAt,
+                sourceLabel = sourceLabel,
+                predictedCategory = category,
+                classificationSource = classifiedBy,
+                transferLikely = TransferDetector.isTransferLike(event.rawTitle, event.rawText),
+                source = TransactionSource.NOTIFICATION,
             )
-        }
+        )
+        markDuplicates(id, event.amount, event.detectedAt)
         return true
+    }
+
+    /** Chain steps ① user history and ③ merchant rules; ETC means "leave it to AI". */
+    private suspend fun classifyWithoutAi(merchant: String): Pair<Category, ClassificationSource> {
+        correctionDao.latestFor(merchantKey(merchant))?.let { return it.correctedCategory to ClassificationSource.USER }
+        RuleClassifier.classify(merchant)?.let { return it to ClassificationSource.RULE }
+        return Category.ETC to ClassificationSource.RULE
+    }
+
+    /** Same amount within ±3 minutes ⇒ one duplicate group (spec §9). */
+    private suspend fun markDuplicates(id: Long, amount: Long, time: Long) {
+        val window = 3 * 60_000L
+        val near = txDao.findSameAmountBetween(amount, time - window, time + window, excludeId = id)
+        if (near.isEmpty()) return
+        val group = near.firstNotNullOfOrNull { it.duplicateGroupId } ?: UUID.randomUUID().toString()
+        txDao.setDuplicateGroup(near.map { it.id } + id, group)
     }
 
     suspend fun setStatus(id: Long, status: TransactionStatus) {
@@ -47,14 +85,51 @@ class TransactionRepository(private val db: AppDatabase) {
         txDao.setStatus(id, status, confirmedAt)
     }
 
-    suspend fun update(transaction: ExpenseTransaction) = txDao.update(transaction)
-
-    suspend fun addManual(transaction: ExpenseTransaction) = txDao.insert(
-        transaction.copy(
-            id = 0,
-            source = TransactionSource.MANUAL,
-            status = TransactionStatus.INCLUDED,
-            confirmedAt = System.currentTimeMillis(),
+    suspend fun saveAiResult(transaction: ExpenseTransaction, category: Category?) {
+        txDao.update(
+            if (category == null || category == Category.ETC) {
+                transaction.copy(aiTried = true)
+            } else {
+                transaction.copy(aiTried = true, predictedCategory = category, classificationSource = ClassificationSource.AI)
+            }
         )
-    )
+    }
+
+    /** Saves a user edit; a changed category is remembered and applied to similar pending rows. */
+    suspend fun saveEdit(original: ExpenseTransaction, edited: ExpenseTransaction) {
+        txDao.update(edited)
+        if (edited.category != original.category) {
+            remember(edited.merchant, predicted = original.predictedCategory, corrected = edited.category)
+        }
+    }
+
+    suspend fun addManual(transaction: ExpenseTransaction) {
+        txDao.insert(
+            transaction.copy(
+                id = 0,
+                source = TransactionSource.MANUAL,
+                status = TransactionStatus.INCLUDED,
+                confirmedAt = System.currentTimeMillis(),
+            )
+        )
+        if (transaction.finalCategory != null && transaction.merchant != "직접 입력") {
+            remember(transaction.merchant, predicted = Category.ETC, corrected = transaction.finalCategory)
+        }
+    }
+
+    private suspend fun remember(merchant: String, predicted: Category, corrected: Category) {
+        val key = merchantKey(merchant)
+        correctionDao.insert(
+            CorrectionHistory(
+                merchant = merchant,
+                merchantKey = key,
+                predictedCategory = predicted,
+                correctedCategory = corrected,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+        txDao.getPending()
+            .filter { it.finalCategory == null && merchantKey(it.merchant) == key && it.predictedCategory != corrected }
+            .forEach { txDao.update(it.copy(predictedCategory = corrected, classificationSource = ClassificationSource.USER)) }
+    }
 }

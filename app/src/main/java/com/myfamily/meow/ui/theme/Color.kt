@@ -17,3 +17,6 @@ val CoralDark = Color(0xFF302326)
 
 val TextPrimary = Color(0xFFF5F5F7)
 val TextSecondary = Color(0xFF8E9197)
+
+val Amber = Color(0xFFF2C063)
+val AmberDark = Color(0xFF332A1A)

@@ -7,8 +7,8 @@ import androidx.compose.ui.unit.sp
 import com.myfamily.meow.ui.theme.AmountStyle
 import com.myfamily.meow.ui.theme.TextPrimary
 
-/** "Verify" title shown at the top of every mockup screen. */
+/** App name title at the top of every screen ("Verify" in the mockups). */
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
-    Text("Verify", color = TextPrimary, fontSize = 22.sp, style = AmountStyle, modifier = modifier)
+    Text("고양이지갑", color = TextPrimary, fontSize = 22.sp, style = AmountStyle, modifier = modifier)
 }

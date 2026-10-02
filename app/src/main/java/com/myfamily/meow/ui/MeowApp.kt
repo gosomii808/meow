@@ -18,8 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ import com.myfamily.meow.ui.common.Wordmark
 import com.myfamily.meow.ui.debug.DebugScreen
 import com.myfamily.meow.ui.onboarding.OnboardingScreen
 import com.myfamily.meow.ui.review.ReviewScreen
+import com.myfamily.meow.ui.settings.SettingsScreen
 import com.myfamily.meow.ui.theme.Background
 import com.myfamily.meow.ui.theme.CoralDark
 import com.myfamily.meow.ui.theme.Mint
@@ -87,12 +90,16 @@ private fun MainScreen() {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.REVIEW) }
     var showDebug by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     var listenerOn by remember { mutableStateOf(true) }
     LifecycleResumeEffect(Unit) {
         listenerOn = NotificationAccess.isGranted(context)
         onPauseOrDispose { }
     }
-    BackHandler(enabled = showDebug) { showDebug = false }
+    BackHandler(enabled = showDebug || showSettings) {
+        showDebug = false
+        showSettings = false
+    }
 
     Column(Modifier.fillMaxSize()) {
         Box(
@@ -100,15 +107,30 @@ private fun MainScreen() {
                 .fillMaxWidth()
                 .padding(vertical = 12.dp),
         ) {
+            IconButton(
+                onClick = {
+                    showSettings = !showSettings
+                    showDebug = false
+                },
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "설정", tint = if (showSettings) Mint else TextSecondary)
+            }
             Wordmark(Modifier.align(Alignment.Center))
             if (BuildConfig.DEBUG) {
-                TextButton(onClick = { showDebug = !showDebug }, modifier = Modifier.align(Alignment.CenterEnd)) {
+                TextButton(
+                    onClick = {
+                        showDebug = !showDebug
+                        showSettings = false
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
                     Text(if (showDebug) "닫기" else "DEV", color = TextSecondary, fontSize = 12.sp)
                 }
             }
         }
 
-        if (!listenerOn && !showDebug) {
+        if (!listenerOn && !showDebug && !showSettings) {
             Row(
                 Modifier
                     .padding(horizontal = 16.dp)
@@ -125,6 +147,7 @@ private fun MainScreen() {
         Box(Modifier.weight(1f)) {
             when {
                 showDebug -> DebugScreen()
+                showSettings -> SettingsScreen()
                 tab == Tab.REVIEW -> ReviewScreen()
                 else -> CalendarScreen()
             }
@@ -133,13 +156,14 @@ private fun MainScreen() {
         HorizontalDivider(color = Outline)
         Row(Modifier.fillMaxWidth()) {
             Tab.entries.forEach { t ->
-                val selected = t == tab && !showDebug
+                val selected = t == tab && !showDebug && !showSettings
                 Column(
                     Modifier
                         .weight(1f)
                         .clickable {
                             tab = t
                             showDebug = false
+                            showSettings = false
                         }
                         .padding(vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

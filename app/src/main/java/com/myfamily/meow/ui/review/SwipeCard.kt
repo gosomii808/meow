@@ -39,9 +39,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.myfamily.meow.classification.Category
+import com.myfamily.meow.data.entity.ClassificationSource
 import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.ui.common.formatTime
 import com.myfamily.meow.ui.common.formatWon
+import com.myfamily.meow.ui.theme.Amber
+import com.myfamily.meow.ui.theme.AmberDark
 import com.myfamily.meow.ui.theme.AmountStyle
 import com.myfamily.meow.ui.theme.Coral
 import com.myfamily.meow.ui.theme.CoralDark
@@ -61,6 +65,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SwipeCard(
     transaction: ExpenseTransaction,
+    aiRunning: Boolean,
     onSwiped: (include: Boolean) -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -98,14 +103,14 @@ fun SwipeCard(
                 }
                 .clickable(onClick = onClick),
         ) {
-            TransactionCardFace(transaction, progress)
+            TransactionCardFace(transaction, progress, aiRunning)
         }
     }
 }
 
 /** [progress] in -1..1: negative tints toward exclude (coral), positive toward include (mint). */
 @Composable
-fun TransactionCardFace(transaction: ExpenseTransaction, progress: Float) {
+fun TransactionCardFace(transaction: ExpenseTransaction, progress: Float, aiRunning: Boolean = false) {
     val shape = RoundedCornerShape(24.dp)
     val (accent, accentBg) = if (progress >= 0) Mint to MintDark else Coral to CoralDark
     val strength = abs(progress)
@@ -142,6 +147,10 @@ fun TransactionCardFace(transaction: ExpenseTransaction, progress: Float) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(8.dp))
+            Text(classificationCaption(transaction, aiRunning), color = TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+            Badges(transaction)
             Spacer(Modifier.weight(1f))
             Text(formatWon(transaction.amount), color = TextPrimary, fontSize = 40.sp, style = AmountStyle)
             Spacer(Modifier.weight(1f))
@@ -170,4 +179,37 @@ fun TransactionCardFace(transaction: ExpenseTransaction, progress: Float) {
             }
         }
     }
+}
+
+private fun classificationCaption(tx: ExpenseTransaction, aiRunning: Boolean): String = when {
+    tx.finalCategory != null -> "직접 고른 카테고리예요"
+    aiRunning -> "AI가 분류하는 중…"
+    tx.transferLikely && tx.category == Category.ETC -> "계좌 이동이면 왼쪽으로 밀어주세요"
+    tx.classificationSource == ClassificationSource.AI -> "AI가 ${tx.category.label}(으)로 분류했어요"
+    tx.classificationSource == ClassificationSource.USER -> "지난번 수정 기록으로 분류했어요"
+    tx.category != Category.ETC -> "가맹점 규칙으로 분류했어요"
+    else -> "탭해서 카테고리를 정해주세요"
+}
+
+/** Spec §9 hints. The system never excludes on its own; the user decides. */
+@Composable
+private fun Badges(tx: ExpenseTransaction) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (tx.transferLikely) Badge("계좌 이동으로 추정돼요")
+        if (tx.duplicateGroupId != null) Badge("중복 가능성이 있어요")
+    }
+}
+
+@Composable
+private fun Badge(text: String) {
+    Text(
+        "⚠ $text",
+        color = Amber,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(AmberDark)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }

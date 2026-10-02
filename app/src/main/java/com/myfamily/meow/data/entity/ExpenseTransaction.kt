@@ -1,5 +1,6 @@
 package com.myfamily.meow.data.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -26,7 +27,12 @@ data class ExpenseTransaction(
     val classificationSource: ClassificationSource = ClassificationSource.RULE,
     val status: TransactionStatus = TransactionStatus.PENDING,
     val source: TransactionSource,
+    /** Same amount within a few minutes as another notification (spec §9). */
     val duplicateGroupId: String? = null,
+    /** Text suggests charge/transfer/withdrawal rather than a purchase (spec §9). */
+    @ColumnInfo(defaultValue = "0") val transferLikely: Boolean = false,
+    /** On-device AI already tried to classify this row (success or not). */
+    @ColumnInfo(defaultValue = "0") val aiTried: Boolean = false,
     val memo: String? = null,
     val confirmedAt: Long? = null,
 ) {

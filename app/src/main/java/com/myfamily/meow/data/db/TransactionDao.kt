@@ -31,4 +31,27 @@ interface TransactionDao {
             "AND transactionTime >= :start AND transactionTime < :end ORDER BY transactionTime ASC"
     )
     fun observeIncludedBetween(start: Long, end: Long): Flow<List<ExpenseTransaction>>
+
+    @Query("SELECT * FROM transactions WHERE status = 'PENDING' ORDER BY transactionTime ASC")
+    suspend fun getPending(): List<ExpenseTransaction>
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE status = 'PENDING'")
+    suspend fun countPending(): Int
+
+    /** Other notification candidates with the same amount in [from, to] — duplicate detection. */
+    @Query(
+        "SELECT * FROM transactions WHERE source = 'NOTIFICATION' AND amount = :amount " +
+            "AND transactionTime BETWEEN :from AND :to AND id != :excludeId"
+    )
+    suspend fun findSameAmountBetween(amount: Long, from: Long, to: Long, excludeId: Long): List<ExpenseTransaction>
+
+    @Query("UPDATE transactions SET duplicateGroupId = :groupId WHERE id IN (:ids)")
+    suspend fun setDuplicateGroup(ids: List<Long>, groupId: String)
+
+    /** Pending rows nothing else could classify; transfers are skipped (category is moot). */
+    @Query(
+        "SELECT * FROM transactions WHERE status = 'PENDING' AND finalCategory IS NULL " +
+            "AND predictedCategory = 'ETC' AND aiTried = 0 AND transferLikely = 0 ORDER BY transactionTime ASC"
+    )
+    suspend fun needingAi(): List<ExpenseTransaction>
 }

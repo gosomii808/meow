@@ -20,6 +20,17 @@ class NotificationParserTest {
     fun tossSentence() = assertEquals(ParsedPayment(3_200, "CU 성균관대점"), parse(FakePaymentNotifier.SINGLES[2]))
 
     @Test
+    fun tossChargeUsesRecipientAfterArrow() =
+        assertEquals(ParsedPayment(10_000, "카카오페이"), parse(FakePaymentNotifier.SINGLES[3]))
+
+    @Test
+    fun tossPersonTransfer() = assertEquals(ParsedPayment(15_000, "홍길동"), parse(FakePaymentNotifier.SINGLES[4]))
+
+    @Test
+    fun sentenceStyleTransfer() =
+        assertEquals(ParsedPayment(15_000, "홍길동"), NotificationParser.parse("토스", "홍길동님에게 15,000원을 보냈어요"))
+
+    @Test
     fun chargeScenario() {
         val parsed = FakePaymentNotifier.CHARGE_SCENARIO.map(::parse)
         assertEquals(

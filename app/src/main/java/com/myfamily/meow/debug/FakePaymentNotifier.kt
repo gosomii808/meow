@@ -30,6 +30,9 @@ object FakePaymentNotifier {
         Fake("KB국민", "KB국민카드", "[Web발신]\nKB국민카드(1234)승인 홍*동 5,500원 일시불 10/02 08:32 스타벅스 강남점 누적123,400원"),
         Fake("신한카드", "신한카드", "신한카드(5678)승인 홍*동 12,000원(일시불)10/02 12:15 배달의민족 누적135,400원"),
         Fake("토스", "토스", "CU 성균관대점에서 3,200원 결제했어요"),
+        // Real Toss format (captured 2026-10-02): title holds amount + 출금, text holds the route.
+        Fake("토스", "10,000원 출금", "내 토스뱅크 통장 → (주)카카오페이(카카오페이)"),
+        Fake("토스", "15,000원 출금", "내 토스뱅크 통장 → 홍길동"),
     )
 
     @SuppressLint("MissingPermission") // Caller checks POST_NOTIFICATIONS.

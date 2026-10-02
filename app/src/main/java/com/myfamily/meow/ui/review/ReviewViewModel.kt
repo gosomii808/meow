@@ -2,6 +2,7 @@ package com.myfamily.meow.ui.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.myfamily.meow.ai.AiCategorizer
 import com.myfamily.meow.data.entity.ExpenseTransaction
 import com.myfamily.meow.data.entity.TransactionStatus
 import com.myfamily.meow.data.repository.TransactionRepository
@@ -10,11 +11,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-class ReviewViewModel(private val repository: TransactionRepository) : ViewModel() {
+class ReviewViewModel(
+    private val repository: TransactionRepository,
+    private val aiCategorizer: AiCategorizer,
+) : ViewModel() {
     /** All unreviewed candidates, oldest first. Null while loading. */
     val pending: StateFlow<List<ExpenseTransaction>?> = repository.pending
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -53,8 +59,21 @@ class ReviewViewModel(private val repository: TransactionRepository) : ViewModel
         _lastSwiped.value = null
     }
 
-    fun update(transaction: ExpenseTransaction) {
-        viewModelScope.launch { repository.update(transaction) }
+    /** Pending ids the on-device model is still working on. */
+    val aiRunningIds = aiCategorizer.runningIds
+
+    init {
+        // New candidates can arrive while the screen is open; classify leftovers each time.
+        viewModelScope.launch {
+            repository.pending
+                .map { list -> list.map { it.id }.toSet() }
+                .distinctUntilChanged()
+                .collect { aiCategorizer.classifyPending() }
+        }
+    }
+
+    fun saveEdit(original: ExpenseTransaction, edited: ExpenseTransaction) {
+        viewModelScope.launch { repository.saveEdit(original, edited) }
     }
 
     fun addManual(transaction: ExpenseTransaction) {
