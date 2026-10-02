@@ -55,7 +55,7 @@ private val STRUGGLE_FRAMES = listOf(
  * grabbed and dragged — it follows the finger and wriggles, then springs back onto the wallet.
  */
 @Composable
-fun AnimatedHomeCat(modifier: Modifier = Modifier) {
+fun AnimatedHomeCat(modifier: Modifier = Modifier, onDraggingChange: (Boolean) -> Unit = {}) {
     var frame by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -126,17 +126,17 @@ fun AnimatedHomeCat(modifier: Modifier = Modifier) {
                 }
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { dragging = true },
+                        onDragStart = { dragging = true; onDraggingChange(true) },
                         onDrag = { change, delta ->
                             change.consume()
                             scope.launch { offset.snapTo(offset.value + delta) }
                         },
                         onDragEnd = {
-                            dragging = false
+                            dragging = false; onDraggingChange(false)
                             scope.launch { offset.animateTo(Offset.Zero, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessLow)) }
                         },
                         onDragCancel = {
-                            dragging = false
+                            dragging = false; onDraggingChange(false)
                             scope.launch { offset.animateTo(Offset.Zero, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessLow)) }
                         },
                     )

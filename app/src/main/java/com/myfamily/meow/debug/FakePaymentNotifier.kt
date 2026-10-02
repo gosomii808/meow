@@ -35,6 +35,11 @@ object FakePaymentNotifier {
         Fake("토스", "15,000원 출금", "내 토스뱅크 통장 → 홍길동"),
     )
 
+    /** KakaoPay settlement: the counterpart received money the user sent, so it's the user's spending. */
+    val SETTLEMENT = listOf(
+        Fake("카카오페이 정산", "홍길동", "홍길동님이 8,000원을 받았어요"),
+    )
+
     @SuppressLint("MissingPermission") // Caller checks POST_NOTIFICATIONS.
     fun post(context: Context, fakes: List<Fake>) {
         val manager = NotificationManagerCompat.from(context)

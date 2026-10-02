@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -106,18 +108,33 @@ fun DebugScreen(modifier: Modifier = Modifier) {
                 dummyMsg = "${rows.size}건 추가됨 (총 ${context.repository.debugCount()}건)"
             }
         }) { Text("지난 3개월치 더미 소비 넣기") }
-        OutlinedButton(onClick = {
-            scope.launch {
-                context.repository.debugDeleteAllTransactions()
-                dummyMsg = "모든 소비 기록 삭제됨"
-            }
-        }) { Text("모든 소비 기록 삭제 (원본 알림은 유지)") }
+        var confirmWipe by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { confirmWipe = true }) { Text("모든 소비 기록 삭제 (원본 알림은 유지)") }
         if (dummyMsg.isNotEmpty()) Text(dummyMsg, color = TextSecondary, fontSize = 13.sp)
+
+        if (confirmWipe) {
+            AlertDialog(
+                onDismissRequest = { confirmWipe = false },
+                title = { Text("모든 소비 기록 삭제") },
+                text = { Text("검토·내역·리포트의 모든 소비 기록이 지워져요. 원본 알림(raw)은 유지됩니다. 되돌릴 수 없어요.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmWipe = false
+                        scope.launch {
+                            val before = context.repository.debugCount()
+                            context.repository.debugDeleteAllTransactions()
+                            dummyMsg = "${before}건 삭제됨"
+                        }
+                    }) { Text("삭제") }
+                },
+                dismissButton = { TextButton(onClick = { confirmWipe = false }) { Text("취소") } },
+            )
+        }
 
         HorizontalDivider()
         Text("가짜 결제 알림 보내기", style = MaterialTheme.typography.titleMedium)
         Button(onClick = { post(FakePaymentNotifier.CHARGE_SCENARIO) }) { Text("출금 → 충전 → 결제 (10,000원 ×3)") }
-        FakePaymentNotifier.SINGLES.forEach { fake ->
+        (FakePaymentNotifier.SINGLES + FakePaymentNotifier.SETTLEMENT).forEach { fake ->
             OutlinedButton(onClick = { post(listOf(fake)) }) { Text("${fake.sourceLabel}: ${fake.text.lines().last().take(24)}…") }
         }
 

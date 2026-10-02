@@ -29,6 +29,22 @@ object PaymentSources {
 
     private val FINANCIAL_SENDER = Regex("카드|은행|뱅크|페이|Pay|금고|신협|농협|우체국|증권")
 
+    private const val KAKAO_TALK = "com.kakao.talk"
+
+    /** KakaoPay settlement/transfer received inside KakaoTalk: "12,000원을 받았어요". */
+    private val KAKAO_SETTLEMENT = Regex("""\d[\d,]*\s*원을?\s*받았어요""")
+
+    /** The settlement-receipt wording, independent of the app (used for debug fakes too). */
+    fun isSettlementText(title: String, text: String): Boolean =
+        KAKAO_SETTLEMENT.containsMatchIn("$title $text")
+
+    /**
+     * The one KakaoTalk message we want despite the sender filter: a KakaoPay settlement receipt.
+     * Sending money gives no notification, but receiving shows "N원을 받았어요" (spec: 정산 수신).
+     */
+    fun isKakaoSettlement(packageName: String, title: String, text: String): Boolean =
+        packageName == KAKAO_TALK && isSettlementText(title, text)
+
     fun isSource(packageName: String) = packageName in FINANCE_APPS || packageName in MESSAGING_APPS
 
     /** For messaging apps the sender (title) must look financial; SMS "[Web발신]" also counts. */

@@ -33,9 +33,13 @@ class PaymentNotificationListener : NotificationListenerService() {
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
 
+        // KakaoPay settlement received: the one KakaoTalk message we keep despite the sender filter.
+        // Debug fakes post from our own package, so there we match on the wording alone.
+        val isSettlement = PaymentSources.isKakaoSettlement(sbn.packageName, title, text) ||
+            (isFake && PaymentSources.isSettlementText(title, text))
         val dropReason = when {
             !isSource -> "수집 대상 앱 아님"
-            !PaymentSources.passesSenderFilter(sbn.packageName, title, text) -> "보낸 사람 필터에 걸림"
+            !isSettlement && !PaymentSources.passesSenderFilter(sbn.packageName, title, text) -> "보낸 사람 필터에 걸림"
             !NotificationParser.looksLikePayment(title, text) -> "결제 키워드 없음"
             else -> null
         }
@@ -43,8 +47,9 @@ class PaymentNotificationListener : NotificationListenerService() {
         // Capture the foreground app now (it changes fast); null when the real notification isn't
         // a payment, or in debug for this app's own fake notifications.
         val foregroundApp = if (dropReason == null && !isFake) ForegroundApp.relevantApp(this) else null
-        // Income (입금/환불/승인취소) is not tracked; drop it instead of recording a fake expense.
-        if (parsed?.isIncome == true) {
+        // Income (입금/환불/승인취소) is not tracked and is dropped — except a KakaoPay settlement.
+        // There "상대가 N원을 받았어요" confirms money the user sent out, so it is the user's EXPENSE.
+        if (parsed?.isIncome == true && !isSettlement) {
             if (diagnostics) {
                 scope.launch {
                     applicationContext.repository.log(NotificationLog(0, sbn.packageName, title, text, sbn.postTime, "수입 알림이라 수집 안 함"))
@@ -56,10 +61,10 @@ class PaymentNotificationListener : NotificationListenerService() {
         scope.launch {
             val repository = applicationContext.repository
             if (dropReason == null) {
-                val label = if (isFake) {
-                    extras.getString(FakePaymentNotifier.EXTRA_SOURCE_LABEL) ?: "테스트"
-                } else {
-                    PaymentSources.label(sbn.packageName, title)
+                val label = when {
+                    isSettlement -> "카카오페이 정산"
+                    isFake -> extras.getString(FakePaymentNotifier.EXTRA_SOURCE_LABEL) ?: "테스트"
+                    else -> PaymentSources.label(sbn.packageName, title)
                 }
                 repository.recordNotification(
                     RawPaymentEvent(
@@ -76,6 +81,8 @@ class PaymentNotificationListener : NotificationListenerService() {
                     sourceLabel = label,
                     foregroundAppLabel = foregroundApp?.let { ForegroundApp.label(applicationContext, it) },
                     foregroundCategory = ForegroundApp.category(foregroundApp),
+                    // A settlement payout is the user's own spending, with a clear memo.
+                    memoOverride = if (isSettlement) "카카오페이 정산" else null,
                 )
             }
             if (diagnostics && !isFake && Diagnostics.looksMoneyRelated(title, text)) {

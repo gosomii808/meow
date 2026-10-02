@@ -89,6 +89,8 @@ class TransactionRepository(private val db: AppDatabase) {
         sourceLabel: String,
         foregroundAppLabel: String? = null,
         foregroundCategory: Category? = null,
+        /** Overrides the "앱 사용 중 결제" note, e.g. "카카오페이 정산" for a settlement payout. */
+        memoOverride: String? = null,
     ): Boolean {
         val rawId = rawDao.insert(event)
         if (rawId == -1L) return false
@@ -108,7 +110,7 @@ class TransactionRepository(private val db: AppDatabase) {
                 transferLikely = TransferDetector.isTransferLike(event.rawTitle, event.rawText),
                 source = TransactionSource.NOTIFICATION,
                 // Spec §FR-03: note which app was open, so the user sees why it was categorized.
-                memo = foregroundAppLabel?.let { "$it 앱 사용 중 결제" },
+                memo = memoOverride ?: foregroundAppLabel?.let { "$it 앱 사용 중 결제" },
             )
         )
         markDuplicates(id, event.amount, event.detectedAt)

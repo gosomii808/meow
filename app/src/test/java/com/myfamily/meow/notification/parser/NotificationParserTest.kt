@@ -67,4 +67,20 @@ class NotificationParserTest {
         assertTrue(NotificationParser.looksLikePayment("신한카드", "승인 5,000원"))
         assertFalse(NotificationParser.looksLikePayment("토스", "오늘의 행운퀴즈 정답을 맞혀보세요"))
     }
+
+    @Test
+    fun kakaoSettlementParsesAmountAndCounterparty() {
+        // "상대가 N원을 받았어요" = money the user paid out; the counterpart is the merchant.
+        val p = NotificationParser.parse("홍길동", "홍길동님이 8,000원을 받았어요")!!
+        assertEquals(8_000, p.amount)
+        assertEquals("홍길동", p.merchant)
+    }
+
+    @Test
+    fun kakaoSettlementDetection() {
+        // Only KakaoTalk + the "받았어요" wording counts; other apps/wording don't.
+        assertTrue(com.myfamily.meow.notification.PaymentSources.isKakaoSettlement("com.kakao.talk", "홍길동", "12,000원을 받았어요"))
+        assertFalse(com.myfamily.meow.notification.PaymentSources.isKakaoSettlement("com.kakao.talk", "친구", "내일 보자"))
+        assertFalse(com.myfamily.meow.notification.PaymentSources.isKakaoSettlement("com.whatever.app", "홍길동", "12,000원을 받았어요"))
+    }
 }

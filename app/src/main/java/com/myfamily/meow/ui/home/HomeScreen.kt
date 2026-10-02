@@ -30,7 +30,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
@@ -45,6 +50,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -91,6 +97,9 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { initializer { HomeViewModel(context.repository) } })
     val s by vm.summary.collectAsStateWithLifecycle()
     val tendency by vm.tendency.collectAsStateWithLifecycle()
+    // While the cat is grabbed it must float above the summary card; otherwise the greeting
+    // (and the wallet) sits behind the card so the wallet tucks under it.
+    var catDragging by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(HomeBackground)) {
     Column(
@@ -99,7 +108,8 @@ fun HomeScreen(
             .padding(horizontal = 24.dz),
     ) {
         Spacer(Modifier.height(20.dz))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // offset (not padding) so only the top bar shifts down; the rest keeps its layout slot.
+        Row(Modifier.fillMaxWidth().offset(y = 40.dz), verticalAlignment = Alignment.CenterVertically) {
             BrandLockup(Modifier.weight(1f).padding(top = 6.dz), catPx = 42, fontPx = 22)
             if (BuildConfig.DEBUG) {
                 TextButton(onClick = onDebug) { Text("DEV", color = TextMuted, fontSize = 13.sz) }
@@ -122,18 +132,13 @@ fun HomeScreen(
             )
         }
 
-        // Greeting with the cat-in-wallet illustration overlapping the summary card.
-        Box(Modifier.fillMaxWidth().zIndex(1f)) {
+        // Greeting with the cat-in-wallet illustration. Normally behind the summary card (so the
+        // wallet tucks under it); lifted above only while the cat is being dragged.
+        Box(Modifier.fillMaxWidth().zIndex(if (catDragging) 2f else 0f)) {
             Column(Modifier.padding(top = 50.dz)) {
                 Text("안녕하세요!", color = PinkMuted, fontSize = 19.sz)
                 Spacer(Modifier.height(4.dz))
-                Text(
-                    "오늘의 소비,\n정리할 시간이에요",
-                    color = TitleColor,
-                    fontSize = 31.sz,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 42.sz,
-                )
+                TypingGreeting()
                 Spacer(Modifier.height(10.dz))
                 Text("직접 확인할 내역 ${s.pending}건", color = TextSecondary, fontSize = 17.sz)
                 if (tendency.hasEnoughData) {
@@ -147,6 +152,7 @@ fun HomeScreen(
                     .align(Alignment.BottomEnd)
                     .offset(x = 6.dz, y = 4.dz)
                     .size(width = 160.dz, height = 150.dz),
+                onDraggingChange = { catDragging = it },
             )
         }
 
@@ -178,6 +184,37 @@ fun HomeScreen(
     }
         CatChatFab(onChat, Modifier.align(Alignment.BottomEnd).padding(24.dz))
     }
+}
+
+private val GREETINGS = listOf(
+    "오늘의 소비,\n정리할 시간이에요",
+    "작은 소비도\n모으면 큰 돈이에요",
+    "오늘은 얼마나\n아꼈을까냥?",
+    "톡 누르면\n응원해줄게냥 🐾",
+)
+
+/** Headline that types itself out; tap to cycle to a different message. */
+@Composable
+private fun TypingGreeting() {
+    var index by remember { mutableIntStateOf(0) }
+    var shown by remember { mutableStateOf("") }
+    LaunchedEffect(index) {
+        shown = ""
+        val full = GREETINGS[index]
+        for (i in full.indices) {
+            shown = full.substring(0, i + 1)
+            delay(45)
+        }
+    }
+    Text(
+        shown.ifEmpty { " " },
+        color = TitleColor,
+        fontSize = 31.sz,
+        fontWeight = FontWeight.ExtraBold,
+        lineHeight = 42.sz,
+        minLines = 2,
+        modifier = Modifier.clickable { index = (index + 1) % GREETINGS.size },
+    )
 }
 
 /** Small pill showing the cat's spending personality and its matching prop (spec J). */
